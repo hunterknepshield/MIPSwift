@@ -6,6 +6,9 @@
 //  Copyright © 2015 Hunter Knepshield. All rights reserved.
 //
 
+// All MIPS instructions with descriptions:
+// http://www.mrc.uidaho.edu/mrc/people/jff/digital/MIPSir.html
+
 import Foundation
 
 enum Instruction {
@@ -36,7 +39,9 @@ enum Instruction {
             // Ensure that the operation has the proper number of arguments
             let argCount = operation.numRegisters + operation.numImmediates
             if strippedComponents.count - 1 != argCount {
-                print("Operation \(operation.name) expects \(argCount) arguments, got \(strippedComponents.count - 1)")
+                print("Operation \(operation.name) expects \(argCount) arguments, got \(strippedComponents.count - 1).")
+                self = Instruction.Invalid(string)
+                return
             }
             
             switch(operation.type) {
@@ -53,7 +58,7 @@ enum Instruction {
             // TODO memory
             // TODO jump
             // TODO branch
-            case .PseudoInstruction:
+            case .ComplexInstruction:
                 // Requires more fine-grained parsing
                 switch(operation.name) {
                 case "li":
@@ -67,11 +72,11 @@ enum Instruction {
                     let reg2 = Register(name: strippedComponents[2])
                     self = Instruction.rType(Operation("addi")!, reg1, reg2, zero)
                 default:
-                    print("Invalid instruction decoded: \(string)")
+                    print("Invalid instruction: \(string)")
                     self = Instruction.Invalid(string)
                 }
             default:
-                print("Invalid instruction decoded: \(string)")
+                print("Invalid instruction: \(string)")
                 self = Instruction.Invalid(string)
             }
         } else {
@@ -178,14 +183,14 @@ struct Operation {
             self.numImmediates = 1
         // Memory operations
         
-        // Pseudo-instructions
+        // More complex instructions
         case "li":
-            self.type = .PseudoInstruction
+            self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 1
             self.numImmediates = 1
         case "move":
-            self.type = .PseudoInstruction
+            self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 2
             self.numImmediates = 0
@@ -202,5 +207,5 @@ enum OperationType {
     case Memory
     case Jump
     case Branch
-    case PseudoInstruction
+    case ComplexInstruction
 }

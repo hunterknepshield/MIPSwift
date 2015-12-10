@@ -132,79 +132,79 @@ struct RegisterFile: CustomStringConvertible {
         case "$zero", "$0":
             assertionFailure("Cannot change immutable register $zero")
         case "$at", "$1":
-            at = value
+            self.at = value
         case "$v0", "$2":
-            v0 = value
+            self.v0 = value
         case "$v1", "$3":
-            v1 = value
+            self.v1 = value
         case "$a0", "$4":
-            a0 = value
+            self.a0 = value
         case "$a1", "$5":
-            a1 = value
+            self.a1 = value
         case "$a2", "$6":
-            a2 = value
+            self.a2 = value
         case "$a3", "$7":
-            a3 = value
+            self.a3 = value
         case "$t0", "$8":
-            t0 = value
+            self.t0 = value
         case "$t1", "$9":
-            t1 = value
+            self.t1 = value
         case "$t2", "$10":
-            t2 = value
+            self.t2 = value
         case "$t3", "$11":
-            t3 = value
+            self.t3 = value
         case "$t4", "$12":
-            t4 = value
+            self.t4 = value
         case "$t5", "$13":
-            t5 = value
+            self.t5 = value
         case "$t6", "$14":
-            t6 = value
+            self.t6 = value
         case "$t7", "$15":
-            t7 = value
+            self.t7 = value
         case "$s0", "$16":
-            s0 = value
+            self.s0 = value
         case "$s1", "$17":
-            s1 = value
+            self.s1 = value
         case "$s2", "$18":
-            s2 = value
+            self.s2 = value
         case "$s3", "$19":
-            s3 = value
+            self.s3 = value
         case "$s4", "$20":
-            s4 = value
+            self.s4 = value
         case "$s5", "$21":
-            s5 = value
+            self.s5 = value
         case "$s6", "$22":
-            s6 = value
+            self.s6 = value
         case "$s7", "$23":
-            s7 = value
+            self.s7 = value
         case "$t8", "$24":
-            t8 = value
+            self.t8 = value
         case "$t9", "$25":
-            t9 = value
+            self.t9 = value
         case "$k0", "$26":
-            k0 = value
+            self.k0 = value
         case "$k1", "$27":
-            k1 = value
+            self.k1 = value
         case "$gp", "$28":
-            gp = value
+            self.gp = value
         case "$sp", "$29":
-            sp = value
+            self.sp = value
         case "$fp", "$30":
-            fp = value
+            self.fp = value
         case "$ra", "$31":
-            ra = value
+            self.ra = value
         case "pc":
-            pc = value
+            self.pc = value
         case "hi":
-            hi = value
+            self.hi = value
         case "lo":
-            lo = value
+            self.lo = value
         default:
             assertionFailure("Invalid register reference: \(name)")
         }
     }
     
-    let regFormat: String = "%08x"
+    let regFormat = "%08x"
     var description: String {
         get {
             var contents = "Register file contents:\n"

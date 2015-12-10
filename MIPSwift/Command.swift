@@ -13,6 +13,7 @@ enum Command {
     // These are not instructions and do not affect the register file,
     // and are only executed for effect
     case Dump
+    case AutoDump
     case Exit
     case Verbose
     case Help
@@ -22,6 +23,8 @@ enum Command {
         switch(string) {
         case ":dump", ":d", ":reg", ":r":
             self = .Dump
+        case ":autodump", ":a":
+            self = .AutoDump
         case ":exit", ":e", ":quit", ":q":
             self = .Exit
         case ":verbose", ":v":

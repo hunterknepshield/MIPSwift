@@ -11,6 +11,7 @@ import Foundation
 class REPL {
     var registers = RegisterFile()
     var verbose = false
+    var autodump = false
     
     func run() {
         print("Initializing REPL...")
@@ -24,6 +25,9 @@ class REPL {
             } else {
                 // This is an instruction, not a command; parse it as such
                 executeInstruction(Instruction(input, verbose))
+                if autodump {
+                    executeCommand(.Dump)
+                }
             }
         }
     }
@@ -38,12 +42,16 @@ class REPL {
         case .Dump:
             // Print the current contents of the register file
             print(registers)
+        case .AutoDump:
+            self.autodump = !self.autodump
+            print("Auto-dump \(self.autodump ? "enabled" : "disabled").")
         case .Exit:
-            print("Exiting...")
+            print("Exiting MIPSwift.")
             exit(0)
         case .Verbose:
             // Toggle current verbosity setting
-            verbose = !verbose
+            self.verbose = !self.verbose
+            print("Verbose \(self.verbose ? "enabled" : "disabled").")
         case .Help:
             // Display the help menu
             print("MIPSwift v\(version)")
@@ -58,15 +66,15 @@ class REPL {
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)
             let result = op.operation!(rsValue, rtValue)
-            registers.set(rd.name, result)
+            self.registers.set(rd.name, result)
         case .iType(let op, let rt, let rs, let imm):
             let rsValue = registers.get(rs.name)
             let result = op.operation!(rsValue, imm.signExtended)
-            registers.set(rt.name, result)
+            self.registers.set(rt.name, result)
         case .jType(let op, let label):
             assertionFailure("J-type instructions unimplemented: \(op) \(label.name).")
         case .Invalid(let invalid):
-            print("Invalid instruction decoded: \(invalid)")
+            print("Invalid instruction: \(invalid)")
         }
     }
 }
