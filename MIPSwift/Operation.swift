@@ -55,7 +55,17 @@ struct Operation {
             self.operation = (^)
             self.numRegisters = 3
             self.numImmediates = 0
-            // ALU-I operations
+        case "slt":
+            self.type = .ALUR
+            self.operation = { return $0 < $1 ? 1 : 0 }
+            self.numRegisters = 3
+            self.numImmediates = 0
+        case "sltu":
+            self.type = .ALUR
+            self.operation = { return UInt32($0) < UInt32($1) ? 1 : 0 }
+            self.numRegisters = 3
+            self.numImmediates = 0
+        // ALU-I operations
         case "addi":
             self.type = .ALUI
             self.operation = (+)
@@ -81,20 +91,30 @@ struct Operation {
             self.operation = (^)
             self.numRegisters = 2
             self.numImmediates = 1
-            // Memory operations
+        case "slti":
+            self.type = .ALUI
+            self.operation = { return $0 < $1 ? 1 : 0 }
+            self.numRegisters = 2
+            self.numImmediates = 1
+        case "sltiu":
+            self.type = .ALUI
+            self.operation = { return UInt32($0) < UInt32($1) ? 1 : 0 }
+            self.numRegisters = 2
+            self.numImmediates = 1
+        // Memory operations
             
-            // More complex instructions
+        // More complex instructions, mostly pseudo-instructions
         case "li":
             self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 1
             self.numImmediates = 1
-        case "move":
+        case "move", "mfhi", "mflo":
             self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 2
             self.numImmediates = 0
-            // Catch-all case for REPL to determine that this is an invalid instruction
+        // Catch-all case for REPL to determine that this is an invalid instruction
         default:
             return nil
         }
