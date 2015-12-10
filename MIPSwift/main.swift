@@ -8,3 +8,5 @@
 
 import Foundation
 
+print("MIPSwift v1.0")
+REPL().run()
