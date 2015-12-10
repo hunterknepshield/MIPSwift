@@ -10,11 +10,7 @@ import Foundation
 
 struct RegisterFile: CustomStringConvertible {
     // User-accessible registers
-    var zero: Int32 {
-        get {
-            return 0
-        }
-    } // $0, immutable
+    var zero: Int32 { get { return 0 } } // $0, immutable
     var at: Int32 = 0 // $1
     var v0: Int32 = 0 // $2
     var v1: Int32 = 0 // $3
@@ -46,11 +42,167 @@ struct RegisterFile: CustomStringConvertible {
     var sp: Int32 = 0 // $29
     var fp: Int32 = 0 // $30
     var ra: Int32 = 0 // $31
-    
     // User-inaccessible registers
     var pc: Int32 = 0
     var hi: Int32 = 0
     var lo: Int32 = 0
+    
+    func get(name: String) -> Int32 {
+        // Get a register's value by its name or alias
+        switch(name) {
+        case "$zero", "$0":
+            return zero
+        case "$at", "$1":
+            return at
+        case "$v0", "$2":
+            return v0
+        case "$v1", "$3":
+            return v1
+        case "$a0", "$4":
+            return a0
+        case "$a1", "$5":
+            return a1
+        case "$a2", "$6":
+            return a2
+        case "$a3", "$7":
+            return a3
+        case "$t0", "$8":
+            return t0
+        case "$t1", "$9":
+            return t1
+        case "$t2", "$10":
+            return t2
+        case "$t3", "$11":
+            return t3
+        case "$t4", "$12":
+            return t4
+        case "$t5", "$13":
+            return t5
+        case "$t6", "$14":
+            return t6
+        case "$t7", "$15":
+            return t7
+        case "$s0", "$16":
+            return s0
+        case "$s1", "$17":
+            return s1
+        case "$s2", "$18":
+            return s2
+        case "$s3", "$19":
+            return s3
+        case "$s4", "$20":
+            return s4
+        case "$s5", "$21":
+            return s5
+        case "$s6", "$22":
+            return s6
+        case "$s7", "$23":
+            return s7
+        case "$t8", "$24":
+            return t8
+        case "$t9", "$25":
+            return t9
+        case "$k0", "$26":
+            return k0
+        case "$k1", "$27":
+            return k1
+        case "$gp", "$28":
+            return gp
+        case "$sp", "$29":
+            return sp
+        case "$fp", "$30":
+            return fp
+        case "$ra", "$31":
+            return ra
+        case "pc":
+            return pc
+        case "hi":
+            return hi
+        case "lo":
+            return lo
+        default:
+            assertionFailure("Invalid register reference: \(name)")
+            return INT32_MAX
+        }
+    }
+    
+    mutating func set(name: String, _ value: Int32) {
+        // Set a register's value by its name or alias
+        switch(name) {
+        case "$zero", "$0":
+            assertionFailure("Cannot change immutable register $zero")
+        case "$at", "$1":
+            at = value
+        case "$v0", "$2":
+            v0 = value
+        case "$v1", "$3":
+            v1 = value
+        case "$a0", "$4":
+            a0 = value
+        case "$a1", "$5":
+            a1 = value
+        case "$a2", "$6":
+            a2 = value
+        case "$a3", "$7":
+            a3 = value
+        case "$t0", "$8":
+            t0 = value
+        case "$t1", "$9":
+            t1 = value
+        case "$t2", "$10":
+            t2 = value
+        case "$t3", "$11":
+            t3 = value
+        case "$t4", "$12":
+            t4 = value
+        case "$t5", "$13":
+            t5 = value
+        case "$t6", "$14":
+            t6 = value
+        case "$t7", "$15":
+            t7 = value
+        case "$s0", "$16":
+            s0 = value
+        case "$s1", "$17":
+            s1 = value
+        case "$s2", "$18":
+            s2 = value
+        case "$s3", "$19":
+            s3 = value
+        case "$s4", "$20":
+            s4 = value
+        case "$s5", "$21":
+            s5 = value
+        case "$s6", "$22":
+            s6 = value
+        case "$s7", "$23":
+            s7 = value
+        case "$t8", "$24":
+            t8 = value
+        case "$t9", "$25":
+            t9 = value
+        case "$k0", "$26":
+            k0 = value
+        case "$k1", "$27":
+            k1 = value
+        case "$gp", "$28":
+            gp = value
+        case "$sp", "$29":
+            sp = value
+        case "$fp", "$30":
+            fp = value
+        case "$ra", "$31":
+            ra = value
+        case "pc":
+            pc = value
+        case "hi":
+            hi = value
+        case "lo":
+            lo = value
+        default:
+            assertionFailure("Invalid register reference: \(name)")
+        }
+    }
     
     let regFormat: String = "%08x"
     var description: String {

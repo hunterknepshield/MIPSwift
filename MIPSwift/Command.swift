@@ -8,9 +8,20 @@
 
 import Foundation
 
-enum Command: String {
+enum Command {
     // Representation of a user-entered command, like :dump or :exit
-    case Dump = ":dump"
-    case Exit = ":exit"
-    case Invalid = ""
+    case Dump
+    case Exit
+    case Invalid(String)
+    
+    init(_ string: String) {
+        switch(string) {
+        case ":dump":
+            self = .Dump
+        case ":exit":
+            self = .Exit
+        default:
+            self = .Invalid(string)
+        }
+    }
 }

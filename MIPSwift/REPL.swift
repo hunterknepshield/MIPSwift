@@ -9,9 +9,7 @@
 import Foundation
 
 class REPL {
-    let keyboard = NSFileHandle.fileHandleWithStandardInput()
-    let registers = RegisterFile()
-    let commandBeginning: Character = ":"
+    var registers = RegisterFile()
     
     func run() {
         print("Initializing REPL...")
@@ -19,14 +17,12 @@ class REPL {
         while true {
             // Read input
             let input = readInput() // Read input (whitespace is already trimmed)
-            if input[0] == commandBeginning {
-                // This is a command, not an instruction; attempt to parse as such
-                print("Got a command.")
-                executeCommand(parseCommand(input))
+            if input.rangeOfString(commandBeginning)?.minElement() == input.startIndex {
+                // This is a command, not an instruction; parse it as such
+                executeCommand(Command(input))
             } else {
-                // This is not a command, attempt to parse as an instruction
-                print("Got an instruction.")
-                
+                // This is an instruction, not a command; parse it as such
+                executeInstruction(Instruction(input))
             }
         }
     }
@@ -34,10 +30,6 @@ class REPL {
     func readInput() -> String {
         let inputData = keyboard.availableData
         return NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
-    }
-    
-    func parseCommand(commandString: String) -> Command {
-        return Command(rawValue: commandString) ?? Command.Invalid
     }
     
     func executeCommand(command: Command) {
@@ -48,38 +40,40 @@ class REPL {
         case .Exit:
             print("Exiting...")
             exit(0)
-        case .Invalid:
-            assertionFailure("Invalid command.")
+        case .Invalid(let invalid):
+            print("Invalid command: \(invalid)")
         }
     }
-    
-    func parseInstruction(instructionString: String) -> Instruction {
-        let operationString = "add" // TODO parse instructionString
-        let operation = Operation(rawValue: operationString) ?? Operation.Invalid
         
-        switch(operation) {
-        case .Add: // All ALU-R operations
-            let rd = Register(name: "")
-            let rs = Register(name: "")
-            let rt = Register(name: "")
-            return Instruction.rType(operation, rd, rs, rt)
-            // TODO other cases (ALU-I, memory, ...)
-        case .Invalid:
-            return Instruction.Invalid(instructionString)
-        }
-    }
-    
     func executeInstruction(instruction: Instruction) {
         switch(instruction) {
         case .rType(let op, let rd, let rs, let rt):
-            print("R-type")
+            let rsValue = registers.get(rs.name)
+            let rtValue = registers.get(rt.name)
+            let result: Int32
+            switch(op) {
+            case .add:
+                result = rsValue + rtValue
+            default:
+                assertionFailure("Invalid operation in R-type instruction: \(op)")
+                result = INT32_MAX
+            }
+            registers.set(rd.name, result)
         case .iType(let op, let rt, let rs, let imm):
-            print("I-type")
+            let rsValue = registers.get(rs.name)
+            let result: Int32
+            switch(op) {
+            case .addi:
+                result = rsValue + imm.signExtended
+            default:
+                assertionFailure("Invalid operation in I-type instruction: \(op)")
+                result = INT32_MAX
+            }
+            registers.set(rt.name, result)
         case .jType(let op, let label):
-            print("Unimplemented")
             assertionFailure("J-type instructions unimplemented.")
-        case .Invalid(let badInstruction):
-            assertionFailure("Invalid instruction decoded: \(badInstruction).")
+        case .Invalid(let invalid):
+            print("Invalid instruction decoded: \(invalid)")
         }
     }
 }
