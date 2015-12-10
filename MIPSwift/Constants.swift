@@ -19,5 +19,9 @@ let keyboard = NSFileHandle.fileHandleWithStandardInput()
 
 // Strings to help with parsing
 let commandBeginning = ":"
+let labelEnd = ":"
 let commentBeginning = "#"
-let validInstructionSeparators = ":(),"
+let validInstructionSeparators = "(),"
+let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: validInstructionSeparators)
+let validLabelCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+let validLabelCharactersCharacterSet = NSCharacterSet(charactersInString: validLabelCharacters)

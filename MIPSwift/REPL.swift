@@ -10,6 +10,7 @@ import Foundation
 
 class REPL {
     var registers = RegisterFile()
+    var verbose = false
     
     func run() {
         print("Initializing REPL...")
@@ -22,7 +23,7 @@ class REPL {
                 executeCommand(Command(input))
             } else {
                 // This is an instruction, not a command; parse it as such
-                executeInstruction(Instruction(input))
+                executeInstruction(Instruction(input, verbose))
             }
         }
     }
@@ -40,6 +41,9 @@ class REPL {
         case .Exit:
             print("Exiting...")
             exit(0)
+        case .Verbose:
+            // Toggle current verbosity setting
+            verbose = !verbose
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }
