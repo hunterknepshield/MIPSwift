@@ -13,9 +13,21 @@ class REPL {
     var verbose = false
     var autodump = false
     
-    func run() {
+    init(options: REPLOptions = REPLOptions()) {
         print("Initializing REPL...")
-        
+        if options.verbose {
+            self.verbose = true
+        }
+        if options.autodump {
+            self.autodump = true
+        }
+        if options.everythingOn {
+            self.verbose = true
+            self.autodump = true
+        }
+    }
+    
+    func run() {
         while true {
             // Read input
             let input = readInput() // Read input (whitespace is already trimmed)
