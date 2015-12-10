@@ -72,8 +72,17 @@ class REPL {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)
-            let result = op.operation!(rsValue, rtValue)
-            self.registers.set(rd.name, result)
+            if op.type == .ALUR {
+                let result = op.operation!(rsValue, rtValue)
+                self.registers.set(rd.name, result)
+            } else if op.type == .ComplexInstruction {
+                // This is a mult/div instruction
+                let result = op.bigOperation!(rsValue, rtValue)
+                let hiValue = Int32(result >> 32) // Upper 32 bits
+                let loValue = Int32(result & 0xFFFF) // Lower 32 bits
+                self.registers.set(hi.name, hiValue)
+                self.registers.set(lo.name, loValue)
+            }
         case .iType(let op, let rt, let rs, let imm):
             let rsValue = registers.get(rs.name)
             let result = op.operation!(rsValue, imm.signExtended)

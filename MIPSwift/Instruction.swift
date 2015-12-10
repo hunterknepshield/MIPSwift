@@ -91,6 +91,12 @@ enum Instruction {
                     } else {
                         self = Instruction.Invalid(string)
                     }
+                case "mult", "multu", "div", "divu":
+                    if let reg1 = Register(arguments[1]), reg2 = Register(arguments[2]) {
+                        self = Instruction.rType(operation, zero, reg1, reg2)
+                    } else {
+                        self = Instruction.Invalid(string)
+                    }
                 default:
                     self = Instruction.Invalid(string)
                 }

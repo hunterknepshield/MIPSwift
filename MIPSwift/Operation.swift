@@ -24,6 +24,7 @@ struct Operation {
     var numRegisters: Int
     var numImmediates: Int
     var operation: ((Int32, Int32) -> Int32)?
+    var bigOperation: ((Int32, Int32) -> Int64)?
     
     // Attempt to initialize an operation from a string; may fail
     init?(_ string: String) {
@@ -112,6 +113,36 @@ struct Operation {
         case "move", "mfhi", "mflo":
             self.type = .ComplexInstruction
             self.operation = (+)
+            self.numRegisters = 2
+            self.numImmediates = 0
+        case "mult":
+            self.type = .ComplexInstruction
+            self.bigOperation = { return Int64($0*$1) }
+            self.numRegisters = 2
+            self.numImmediates = 0
+        case "multu":
+            self.type = .ComplexInstruction
+            self.bigOperation = { return Int64(UInt32($0)*UInt32($1)) }
+            self.numRegisters = 2
+            self.numImmediates = 0
+        case "div":
+            self.type = .ComplexInstruction
+            self.bigOperation = {
+                let quotient = $0 / $1 // To be stored in lo
+                let remainder = $0 % $1 // To be stored in hi
+                return Int64(remainder << 16) | Int64(quotient)
+            }
+            self.numRegisters = 2
+            self.numImmediates = 0
+        case "divu":
+            self.type = .ComplexInstruction
+            self.bigOperation = {
+                let u1 = UInt32($0)
+                let u2 = UInt32($1)
+                let quotient = u1 / u2 // To be stored in lo
+                let remainder = u1 % u2 // To be stored in hi
+                return Int64(remainder << 16) | Int64(quotient)
+            }
             self.numRegisters = 2
             self.numImmediates = 0
         // Catch-all case for REPL to determine that this is an invalid instruction
