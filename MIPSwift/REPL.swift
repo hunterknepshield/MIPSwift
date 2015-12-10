@@ -44,6 +44,9 @@ class REPL {
         case .Verbose:
             // Toggle current verbosity setting
             verbose = !verbose
+        case .Help:
+            // Display the help menu
+            print("MIPSwift v\(version)")
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }
@@ -54,28 +57,14 @@ class REPL {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)
-            let result: Int32
-            switch(op) {
-            case .add:
-                result = rsValue + rtValue
-            default:
-                assertionFailure("Invalid operation in R-type instruction: \(op)")
-                result = INT32_MAX
-            }
+            let result = op.operation!(rsValue, rtValue)
             registers.set(rd.name, result)
         case .iType(let op, let rt, let rs, let imm):
             let rsValue = registers.get(rs.name)
-            let result: Int32
-            switch(op) {
-            case .addi:
-                result = rsValue + imm.signExtended
-            default:
-                assertionFailure("Invalid operation in I-type instruction: \(op)")
-                result = INT32_MAX
-            }
+            let result = op.operation!(rsValue, imm.signExtended)
             registers.set(rt.name, result)
         case .jType(let op, let label):
-            assertionFailure("J-type instructions unimplemented.")
+            assertionFailure("J-type instructions unimplemented: \(op) \(label.name).")
         case .Invalid(let invalid):
             print("Invalid instruction decoded: \(invalid)")
         }

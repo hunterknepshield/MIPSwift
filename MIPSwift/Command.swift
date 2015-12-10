@@ -10,10 +10,12 @@ import Foundation
 
 enum Command {
     // Representation of a user-entered command, like :dump or :exit
-    // These are not instructions and do not affect the register file
+    // These are not instructions and do not affect the register file,
+    // and are only executed for effect
     case Dump
     case Exit
     case Verbose
+    case Help
     case Invalid(String)
     
     init(_ string: String) {
@@ -24,6 +26,8 @@ enum Command {
             self = .Exit
         case ":verbose", ":v":
             self = .Verbose
+        case ":help", ":h":
+            self = .Help
         default:
             self = .Invalid(string)
         }

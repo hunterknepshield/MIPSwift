@@ -8,6 +8,9 @@
 
 import Foundation
 
+// General constants
+let version = 1.0
+
 // Register objects that are used often
 let zero = Register(name: "$zero")
 let pc = Register(name: "pc")
