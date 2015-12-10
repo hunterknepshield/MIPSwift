@@ -34,7 +34,11 @@ class REPL {
     
     func readInput() -> String {
         let inputData = keyboard.availableData
-        return NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
+        let inputString = NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
+        if !inputString.canBeConvertedToEncoding(NSASCIIStringEncoding) {
+            return ":\(inputString)"
+        }
+        return inputString
     }
     
     func executeCommand(command: Command) {
@@ -55,6 +59,9 @@ class REPL {
         case .Help:
             // Display the help menu
             print("MIPSwift v\(version)")
+        case .NoOp:
+            // Do nothing
+            break
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }

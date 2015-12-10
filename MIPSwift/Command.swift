@@ -17,6 +17,7 @@ enum Command {
     case Exit
     case Verbose
     case Help
+    case NoOp
     case Invalid(String)
     
     init(_ string: String) {
@@ -29,8 +30,10 @@ enum Command {
             self = .Exit
         case ":verbose", ":v":
             self = .Verbose
-        case ":help", ":h":
+        case ":help", ":h", ":?":
             self = .Help
+        case ":noop", ":n":
+            self = .NoOp
         default:
             self = .Invalid(string)
         }

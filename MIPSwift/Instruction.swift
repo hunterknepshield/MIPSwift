@@ -46,15 +46,17 @@ enum Instruction {
             
             switch(operation.type) {
             case .ALUR: // All ALU-R operations of format op, rd, rs, rt
-                let reg1 = Register(name: strippedComponents[1])
-                let reg2 = Register(name: strippedComponents[2])
-                let reg3 = Register(name: strippedComponents[3])
-                self = Instruction.rType(operation, reg1, reg2, reg3)
+                if let reg1 = Register(strippedComponents[1]), reg2 = Register(strippedComponents[2]), reg3 = Register(strippedComponents[3]) {
+                    self = Instruction.rType(operation, reg1, reg2, reg3)
+                } else {
+                    self = Instruction.Invalid(string)
+                }
             case .ALUI: // All ALU-I operations of format op, rt, rs, imm
-                let reg1 = Register(name: strippedComponents[1])
-                let reg2 = Register(name: strippedComponents[2])
-                let imm = Immediate(string: strippedComponents[3])!
-                self = Instruction.iType(operation, reg1, reg2, imm)
+                if let reg1 = Register(strippedComponents[1]), reg2 = Register(strippedComponents[2]), imm = Immediate(string: strippedComponents[3]) {
+                    self = Instruction.iType(operation, reg1, reg2, imm)
+                } else {
+                    self = Instruction.Invalid(string)
+                }
             // TODO memory
             // TODO jump
             // TODO branch
@@ -63,20 +65,22 @@ enum Instruction {
                 switch(operation.name) {
                 case "li":
                     // Transform to an addi ($rt = $zero + imm)
-                    let reg1 = Register(name: strippedComponents[1])
-                    let imm = Immediate(string: strippedComponents[2])!
-                    self = Instruction.iType(Operation("addi")!, reg1, zero, imm)
+                    if let reg1 = Register(strippedComponents[1]), imm = Immediate(string: strippedComponents[2]) {
+                        self = Instruction.iType(Operation("addi")!, reg1, zero, imm)
+                    } else {
+                        self = Instruction.Invalid(string)
+                    }
                 case "move":
                     // Transform to an add ($rt = $rs + $zero)
-                    let reg1 = Register(name: strippedComponents[1])
-                    let reg2 = Register(name: strippedComponents[2])
-                    self = Instruction.rType(Operation("addi")!, reg1, reg2, zero)
+                    if let reg1 = Register(strippedComponents[1]), reg2 = Register(strippedComponents[2]) {
+                        self = Instruction.rType(Operation("addi")!, reg1, reg2, zero)
+                    } else {
+                        self = Instruction.Invalid(string)
+                    }
                 default:
-                    print("Invalid instruction: \(string)")
                     self = Instruction.Invalid(string)
                 }
             default:
-                print("Invalid instruction: \(string)")
                 self = Instruction.Invalid(string)
             }
         } else {
@@ -88,6 +92,14 @@ enum Instruction {
 struct Register {
     // Representation of a source/destination register
     var name: String
+    
+    init?(_ name: String, user: Bool = true) {
+        if user && immutableRegisters.contains(name) {
+            print("User may not modify register \(name)")
+            return nil
+        }
+        self.name = name
+    }
 }
 
 struct Immediate {
@@ -106,6 +118,7 @@ struct Immediate {
         if immValue != nil {
             self.value = immValue!
         } else {
+            print("Unable to create immediate value from string: \(string)")
             return nil
         }
     }
