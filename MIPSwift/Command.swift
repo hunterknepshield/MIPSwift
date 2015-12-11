@@ -13,6 +13,7 @@ enum Command {
     // These are not instructions and do not affect the register file,
     // and are only executed for effect
     case Dump
+    case Label
     case AutoDump
     case Exit
     case Verbose
@@ -25,10 +26,16 @@ enum Command {
     case Invalid(String)
     
     init(_ string: String) {
+        if string == "" {
+            self = .NoOp
+            return
+        }
         let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
         switch(strippedString) {
         case "dump", "d", "reg", "r":
             self = .Dump
+        case "label", "l":
+            self = .Label
         case "autodump", "a":
             self = .AutoDump
         case "exit", "e", "quit", "q":
@@ -37,7 +44,7 @@ enum Command {
             self = .Verbose
         case "help", "h", "?":
             self = .Help
-        case "noop", "n":
+        case "noop", "n", "":
             self = .NoOp
         case "dec", "decimal":
             self = .Decimal

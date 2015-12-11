@@ -32,5 +32,4 @@ let labelEnd = ":"
 let commentBeginning = "#"
 let validInstructionSeparators = "(), \t"
 let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: validInstructionSeparators)
-let validLabelCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
-let validLabelCharactersCharacterSet = NSCharacterSet(charactersInString: validLabelCharacters)
+let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$") // Labels must be alphanumeric and must start with a letter

@@ -17,6 +17,7 @@ struct REPLOptions {
 
 enum PrintOption: String {
     case Hex = "%08x"
+    case HexWith0x = "%#010x"
     case Decimal = "%010d"
     case Octal = "%016o"
     case Binary = "%032b"
