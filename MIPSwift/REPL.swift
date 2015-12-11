@@ -15,6 +15,7 @@ class REPL {
     
     init(options: REPLOptions = REPLOptions()) {
         print("Initializing REPL...")
+        self.registers.set(pc.name, beginningPc)
         if options.verbose {
             self.verbose = true
         }
@@ -30,14 +31,19 @@ class REPL {
     
     func run() {
         while true {
+            // Print the prompt
+            let pcValue = self.registers.get(pc.name)
+            print(pcValue.format(PrintOption.Hex.rawValue), terminator: "> ")
             // Read input
             let input = readInput() // Read input (whitespace is already trimmed)
             if input.rangeOfString(commandBeginning)?.minElement() == input.startIndex {
                 // This is a command, not an instruction; parse it as such
                 executeCommand(Command(input))
             } else {
+                // Increment the program counter
+                self.registers.set(pc.name, pcValue + 4)
                 // This is an instruction, not a command; parse it as such
-                executeInstruction(Instruction(input, verbose))
+                executeInstruction(Instruction(input, pcValue + 4, verbose))
                 if autodump {
                     executeCommand(.Dump)
                 }
@@ -71,7 +77,7 @@ class REPL {
             print("Verbose \(self.verbose ? "enabled" : "disabled").")
         case .Help:
             // Display the help menu
-            print("MIPSwift v\(version)")
+            print("MIPSwift v\(mipswiftVersion)")
         case .NoOp:
             // Do nothing
             break
@@ -93,7 +99,7 @@ class REPL {
     }
         
     func executeInstruction(instruction: Instruction) {
-        switch(instruction) {
+        switch(instruction.type) {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)

@@ -25,29 +25,30 @@ enum Command {
     case Invalid(String)
     
     init(_ string: String) {
-        switch(string) {
-        case ":dump", ":d", ":reg", ":r":
+        let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
+        switch(strippedString) {
+        case "dump", "d", "reg", "r":
             self = .Dump
-        case ":autodump", ":a":
+        case "autodump", "a":
             self = .AutoDump
-        case ":exit", ":e", ":quit", ":q":
+        case "exit", "e", "quit", "q":
             self = .Exit
-        case ":verbose", ":v":
+        case "verbose", "v":
             self = .Verbose
-        case ":help", ":h", ":?":
+        case "help", "h", "?":
             self = .Help
-        case ":noop", ":n":
+        case "noop", "n":
             self = .NoOp
-        case ":dec", ":decimal":
+        case "dec", "decimal":
             self = .Decimal
-        case ":hex", ":hexadecimal":
+        case "hex", "hexadecimal":
             self = .Hex
-        case ":oct", ":octal":
+        case "oct", "octal":
             self = .Octal
-        case ":bin", ":binary":
+        case "bin", "binary":
             self = .Binary
         default:
-            self = .Invalid(string)
+            self = .Invalid(strippedString)
         }
     }
 }

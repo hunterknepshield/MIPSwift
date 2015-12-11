@@ -9,7 +9,9 @@
 import Foundation
 
 // General constants
-let version = 1.0
+let mipswiftVersion = 1.0
+let beginningPc: Int32 = 0x00400000
+let beginningMem: Int32 = 0x10000000
 
 // Constants to aid with parsing logic
 let immutableRegisters = ["hi", "$hi", "lo", "$lo", "pc", "$pc", "$zero", "$0"]

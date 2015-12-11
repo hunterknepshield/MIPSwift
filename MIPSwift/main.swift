@@ -8,5 +8,5 @@
 
 import Foundation
 
-print("MIPSwift v\(version)")
+print("MIPSwift v\(mipswiftVersion)")
 REPL().run()

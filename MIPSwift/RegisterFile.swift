@@ -8,7 +8,7 @@
 
 import Foundation
 
-struct RegisterFile: CustomStringConvertible {
+class RegisterFile: CustomStringConvertible {
     // User-accessible registers
     var zero: Int32 { get { return 0 } } // $0, immutable
     var at: Int32 = 0 // $1
@@ -126,7 +126,7 @@ struct RegisterFile: CustomStringConvertible {
         }
     }
     
-    mutating func set(name: String, _ value: Int32) {
+    func set(name: String, _ value: Int32) {
         // Set a register's value by its name or alias
         switch(name) {
         case "$zero", "$0":
