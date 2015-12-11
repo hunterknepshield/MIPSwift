@@ -15,7 +15,7 @@ enum InstructionType {
     case rType(Operation, Register, Register, Register)
     case iType(Operation, Register, Register, Immediate)
     case jType(Operation, String)
-    case Empty // This line only contains labels and/or comments
+    case NonExecutable // This line only contains labels and/or comments
     case Invalid // Malformed instruction
 }
 
@@ -87,7 +87,7 @@ class Instruction: CustomStringConvertible {
         // then remove it and any subsequent elements from the array and continue parsing
 
         if arguments.count == 0 {
-            self.type = .Empty
+            self.type = .NonExecutable
             return
         }
         

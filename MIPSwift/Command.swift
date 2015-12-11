@@ -12,6 +12,9 @@ enum Command {
     // Representation of a user-entered command, like :dump or :exit
     // These are not instructions and do not affect the register file,
     // and are only executed for effect
+    case AutoExecute
+    case Execute
+    case Trace
     case Dump
     case Label
     case AutoDump
@@ -32,13 +35,19 @@ enum Command {
         }
         let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
         switch(strippedString) {
+        case "autoexecute", "ae":
+            self = .AutoExecute
+        case "execute", "exec", "ex", "e":
+            self = .Execute
+        case "trace", "t":
+            self = .Trace
         case "dump", "d", "reg", "r":
             self = .Dump
         case "label", "l":
             self = .Label
-        case "autodump", "a":
+        case "autodump", "ad":
             self = .AutoDump
-        case "exit", "e", "quit", "q":
+        case "exit", "quit", "q":
             self = .Exit
         case "verbose", "v":
             self = .Verbose
@@ -46,10 +55,10 @@ enum Command {
             self = .Help
         case "noop", "n", "":
             self = .NoOp
-        case "dec", "decimal":
-            self = .Decimal
         case "hex", "hexadecimal":
             self = .Hex
+        case "dec", "decimal":
+            self = .Decimal
         case "oct", "octal":
             self = .Octal
         case "bin", "binary":

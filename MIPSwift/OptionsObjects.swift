@@ -11,6 +11,8 @@ import Foundation
 struct REPLOptions {
     var verbose = false
     var autodump = false
+    var autoexecute = true
+    var trace = false
     var printSetting: PrintOption = .Hex
     var everythingOn = false
 }
