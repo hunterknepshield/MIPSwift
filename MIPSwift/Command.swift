@@ -18,6 +18,8 @@ enum Command {
     case Verbose
     case Help
     case NoOp
+    case Hex
+    case Decimal
     case Invalid(String)
     
     init(_ string: String) {
@@ -34,6 +36,10 @@ enum Command {
             self = .Help
         case ":noop", ":n":
             self = .NoOp
+        case ":dec", ":decimal":
+            self = .Decimal
+        case ":hex":
+            self = .Hex
         default:
             self = .Invalid(string)
         }

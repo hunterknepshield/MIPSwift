@@ -11,5 +11,6 @@ import Foundation
 struct REPLOptions {
     var verbose = false
     var autodump = false
+    var decimal = false
     var everythingOn = false
 }

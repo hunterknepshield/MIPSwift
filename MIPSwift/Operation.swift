@@ -110,10 +110,15 @@ struct Operation {
             self.operation = (+)
             self.numRegisters = 1
             self.numImmediates = 1
-        case "move", "mfhi", "mflo":
+        case "move":
             self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 2
+            self.numImmediates = 0
+        case "mfhi", "mflo":
+            self.type = .ComplexInstruction
+            self.operation = (+)
+            self.numRegisters = 1
             self.numImmediates = 0
         case "mult":
             self.type = .ComplexInstruction
@@ -130,7 +135,7 @@ struct Operation {
             self.bigOperation = {
                 let quotient = $0 / $1 // To be stored in lo
                 let remainder = $0 % $1 // To be stored in hi
-                return Int64(remainder << 16) | Int64(quotient)
+                return Int64(remainder) << 32 | Int64(quotient)
             }
             self.numRegisters = 2
             self.numImmediates = 0
@@ -141,7 +146,7 @@ struct Operation {
                 let u2 = UInt32($1)
                 let quotient = u1 / u2 // To be stored in lo
                 let remainder = u1 % u2 // To be stored in hi
-                return Int64(remainder << 16) | Int64(quotient)
+                return Int64(remainder << 32) | Int64(quotient)
             }
             self.numRegisters = 2
             self.numImmediates = 0

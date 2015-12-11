@@ -21,6 +21,9 @@ class REPL {
         if options.autodump {
             self.autodump = true
         }
+        if options.decimal {
+            self.registers.printHex = false
+        }
         if options.everythingOn {
             self.verbose = true
             self.autodump = true
@@ -74,6 +77,12 @@ class REPL {
         case .NoOp:
             // Do nothing
             break
+        case .Decimal:
+            self.registers.printHex = false
+            print("Outputting register file using decimal print formatting.")
+        case .Hex:
+            self.registers.printHex = true
+            print("Outputting register file using hexadecimal print formatting.")
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }
@@ -84,14 +93,14 @@ class REPL {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)
-            if op.type == .ALUR {
+            if op.type == .ALUR || op.operation != nil {
                 let result = op.operation!(rsValue, rtValue)
                 self.registers.set(rd.name, result)
-            } else if op.type == .ComplexInstruction {
+            } else if op.type == .ComplexInstruction && op.bigOperation != nil {
                 // This is a mult/div instruction
                 let result = op.bigOperation!(rsValue, rtValue)
                 let hiValue = Int32(result >> 32) // Upper 32 bits
-                let loValue = Int32(result & 0xFFFF) // Lower 32 bits
+                let loValue = Int32(result & 0xFFFFFFFF) // Lower 32 bits
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
             }

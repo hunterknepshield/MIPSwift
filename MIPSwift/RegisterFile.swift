@@ -204,19 +204,22 @@ struct RegisterFile: CustomStringConvertible {
         }
     }
     
-    let regFormat = "%08x"
+    let hexFormat = "%08x"
+    let decimalFormat = "%010d"
+    var printHex = true
     var description: String {
         get {
+            let format = self.printHex ? self.hexFormat : self.decimalFormat
             var contents = "Register file contents:\n"
-            contents += "$zero: \(zero.format(regFormat))  $at: \(at.format(regFormat))  $v0: \(v0.format(regFormat))  $v1: \(v1.format(regFormat))\n"
-            contents += "  $a0: \(a0.format(regFormat))  $a1: \(a1.format(regFormat))  $a2: \(a2.format(regFormat))  $a3: \(a3.format(regFormat))\n"
-            contents += "  $t0: \(t0.format(regFormat))  $t1: \(t1.format(regFormat))  $t2: \(t2.format(regFormat))  $t3: \(t3.format(regFormat))\n"
-            contents += "  $t4: \(t4.format(regFormat))  $t5: \(t4.format(regFormat))  $t6: \(t6.format(regFormat))  $t7: \(t7.format(regFormat))\n"
-            contents += "  $s0: \(s0.format(regFormat))  $s1: \(s1.format(regFormat))  $s2: \(s2.format(regFormat))  $s3: \(s3.format(regFormat))\n"
-            contents += "  $s4: \(s4.format(regFormat))  $s5: \(s5.format(regFormat))  $s6: \(s6.format(regFormat))  $s7: \(s7.format(regFormat))\n"
-            contents += "  $t8: \(t8.format(regFormat))  $t9: \(t9.format(regFormat))  $k0: \(k0.format(regFormat))  $k1: \(k1.format(regFormat))\n"
-            contents += "  $gp: \(gp.format(regFormat))  $sp: \(sp.format(regFormat))  $fp: \(fp.format(regFormat))  $ra: \(ra.format(regFormat))\n"
-            contents += "   pc: \(pc.format(regFormat))   hi: \(hi.format(regFormat))   lo: \(lo.format(regFormat))"
+            contents += "$zero: \(zero.format(format))  $at: \(at.format(format))  $v0: \(v0.format(format))  $v1: \(v1.format(format))\n"
+            contents += "  $a0: \(a0.format(format))  $a1: \(a1.format(format))  $a2: \(a2.format(format))  $a3: \(a3.format(format))\n"
+            contents += "  $t0: \(t0.format(format))  $t1: \(t1.format(format))  $t2: \(t2.format(format))  $t3: \(t3.format(format))\n"
+            contents += "  $t4: \(t4.format(format))  $t5: \(t4.format(format))  $t6: \(t6.format(format))  $t7: \(t7.format(format))\n"
+            contents += "  $s0: \(s0.format(format))  $s1: \(s1.format(format))  $s2: \(s2.format(format))  $s3: \(s3.format(format))\n"
+            contents += "  $s4: \(s4.format(format))  $s5: \(s5.format(format))  $s6: \(s6.format(format))  $s7: \(s7.format(format))\n"
+            contents += "  $t8: \(t8.format(format))  $t9: \(t9.format(format))  $k0: \(k0.format(format))  $k1: \(k1.format(format))\n"
+            contents += "  $gp: \(gp.format(format))  $sp: \(sp.format(format))  $fp: \(fp.format(format))  $ra: \(ra.format(format))\n"
+            contents += "   pc: \(pc.format(format))   hi: \(hi.format(format))   lo: \(lo.format(format))"
             return contents
         }
     }
