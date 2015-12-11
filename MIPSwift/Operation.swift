@@ -36,9 +36,19 @@ struct Operation {
             self.operation = (+)
             self.numRegisters = 3
             self.numImmediates = 0
+        case "addu":
+            self.type = .ALUR
+            self.operation = { return Int32(UInt32($0) + UInt32($1)) }
+            self.numRegisters = 3
+            self.numImmediates = 0
         case "sub":
             self.type = .ALUR
             self.operation = (-)
+            self.numRegisters = 3
+            self.numImmediates = 0
+        case "subu":
+            self.type = .ALUR
+            self.operation = { return Int32(UInt32($0) - UInt32($1)) }
             self.numRegisters = 3
             self.numImmediates = 0
         case "and":
@@ -66,15 +76,20 @@ struct Operation {
             self.operation = { return UInt32($0) < UInt32($1) ? 1 : 0 }
             self.numRegisters = 3
             self.numImmediates = 0
+        case "sllv":
+            self.type = .ALUR
+            self.operation = { return $0 << $1 }
+            self.numRegisters = 3
+            self.numImmediates = 0
         // ALU-I operations
         case "addi":
             self.type = .ALUI
             self.operation = (+)
             self.numRegisters = 2
             self.numImmediates = 1
-        case "subi":
+        case "addiu":
             self.type = .ALUI
-            self.operation = (-)
+            self.operation = { return Int32(UInt32($0) + UInt32($1)) }
             self.numRegisters = 2
             self.numImmediates = 1
         case "andi":
@@ -100,6 +115,11 @@ struct Operation {
         case "sltiu":
             self.type = .ALUI
             self.operation = { return UInt32($0) < UInt32($1) ? 1 : 0 }
+            self.numRegisters = 2
+            self.numImmediates = 1
+        case "sll":
+            self.type = .ALUI
+            self.operation = { return $0 << $1 }
             self.numRegisters = 2
             self.numImmediates = 1
         // Memory operations

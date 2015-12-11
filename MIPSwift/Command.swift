@@ -20,6 +20,8 @@ enum Command {
     case NoOp
     case Hex
     case Decimal
+    case Octal
+    case Binary
     case Invalid(String)
     
     init(_ string: String) {
@@ -38,8 +40,12 @@ enum Command {
             self = .NoOp
         case ":dec", ":decimal":
             self = .Decimal
-        case ":hex":
+        case ":hex", ":hexadecimal":
             self = .Hex
+        case ":oct", ":octal":
+            self = .Octal
+        case ":bin", ":binary":
+            self = .Binary
         default:
             self = .Invalid(string)
         }

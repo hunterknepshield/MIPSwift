@@ -21,13 +21,11 @@ class REPL {
         if options.autodump {
             self.autodump = true
         }
-        if options.decimal {
-            self.registers.printHex = false
-        }
         if options.everythingOn {
             self.verbose = true
             self.autodump = true
         }
+        self.registers.printOption = options.printSetting
     }
     
     func run() {
@@ -78,11 +76,17 @@ class REPL {
             // Do nothing
             break
         case .Decimal:
-            self.registers.printHex = false
+            self.registers.printOption = .Decimal
             print("Outputting register file using decimal print formatting.")
         case .Hex:
-            self.registers.printHex = true
+            self.registers.printOption = .Hex
             print("Outputting register file using hexadecimal print formatting.")
+        case .Binary:
+            self.registers.printOption = .Binary
+            print("Outputting register file using binary print formatting.")
+        case .Octal:
+            self.registers.printOption = .Octal
+            print("Outputting register file using octal print formatting.")
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }

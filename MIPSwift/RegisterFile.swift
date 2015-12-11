@@ -204,12 +204,10 @@ struct RegisterFile: CustomStringConvertible {
         }
     }
     
-    let hexFormat = "%08x"
-    let decimalFormat = "%010d"
-    var printHex = true
+    var printOption: PrintOption = .Hex
     var description: String {
         get {
-            let format = self.printHex ? self.hexFormat : self.decimalFormat
+            let format = printOption.rawValue
             var contents = "Register file contents:\n"
             contents += "$zero: \(zero.format(format))  $at: \(at.format(format))  $v0: \(v0.format(format))  $v1: \(v1.format(format))\n"
             contents += "  $a0: \(a0.format(format))  $a1: \(a1.format(format))  $a2: \(a2.format(format))  $a3: \(a3.format(format))\n"
