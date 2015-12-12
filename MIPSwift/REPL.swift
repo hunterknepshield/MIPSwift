@@ -39,11 +39,9 @@ class REPL {
         while true {
             // Print the prompt
             print("\(currentPc.format(PrintOption.HexWith0x.rawValue))> ", terminator: "") // Prints PC without a newline
-            // Read input
-            let input = readInput() // Read input (whitespace is already trimmed)
+            let input = readInput() // Read input (whitespace is already trimmed from either end)
             if input.rangeOfString(commandBeginning)?.minElement() == input.startIndex || input == "" {
                 // This is a command, not an instruction; parse it as such
-                // Also ignore any PC update logic
                 executeCommand(Command(input))
             } else {
                 // This is an instruction, not a command; parse it as such
@@ -64,7 +62,6 @@ class REPL {
                         dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
                         continue
                     }
-                    break
                 default:
                     // Increment the program counter, store its new value in the register file, and then execute
                     let dupes = findDuplicateLabels(instruction.labels)
@@ -117,7 +114,10 @@ class REPL {
             currentInstruction = currentInstruction!.next
         }
         print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
-        if !self.autoexecute {
+        if self.autoexecute {
+            // Auto-execution is enabled, so wipe any stored pausedPc value
+            self.pausedPc = nil
+        } else {
             // Update the pausedPc to note that execution has come this far
             self.pausedPc = self.currentPc
         }
