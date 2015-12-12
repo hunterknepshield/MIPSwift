@@ -11,6 +11,7 @@ import Foundation
 class REPL {
     var registers = RegisterFile()
     var currentPc = beginningPc // To avoid constantly getting and setting self.registers.pc
+    var pausedPc: Int32? // Keep track of where execution was last paused
     var labelsToLocations = [String : Int32]() // Maps labels to locations
     var locationsToInstructions = [Int32 : Instruction]() // Maps locations to instructions
     var firstInstruction: Instruction?
@@ -26,14 +27,7 @@ class REPL {
         self.verbose = options.verbose
         self.autodump = options.autodump
         self.autoexecute = options.autoexecute
-        self.trace = options.trace
-        
-        if options.everythingOn {
-            self.verbose = true
-            self.autodump = true
-            self.autoexecute = true
-            self.trace = true
-        }
+        self.trace = options.trace        
         self.registers.printOption = options.printSetting
         
         self.run()
@@ -98,7 +92,6 @@ class REPL {
                     self.firstInstruction = instruction
                 }
                 previousInstruction = instruction
-                self.lastExecutedInstruction = instruction // May be an empty instruction, but it is definitely valid
                 instruction.labels.forEach({ labelsToLocations[$0] = instruction.location }) // Store labels in the dictionary
             }
         }
@@ -115,16 +108,19 @@ class REPL {
     
     func resumeExecution() {
         print("Resuming execution...")
-        assert(!self.autoexecute, "Impossible to resume execution when auto-execute is enabled.")
         // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstruction
         // Alternatively, if lastExecutedInstruction is nil, nothing was ever executed, so start from the beginning
-        var currentInstruction = self.lastExecutedInstruction?.next ?? self.firstInstruction
+        var currentInstruction = locationsToInstructions[pausedPc ?? beginningPc]
         while currentInstruction != nil {
             // Execute the current instruction, then execute currentInstruction.next, etc. until nil is found
             executeInstruction(currentInstruction!)
             currentInstruction = currentInstruction!.next
         }
-        print("Execution has caught up.")
+        print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+        if !self.autoexecute {
+            // Update the pausedPc to note that execution has come this far
+            self.pausedPc = self.currentPc
+        }
     }
     
     func executeCommand(command: Command) {
@@ -132,11 +128,23 @@ class REPL {
         case .AutoExecute:
             // Toggle current auto-execute setting
             self.autoexecute = !self.autoexecute
-            print("Auto-execute \(self.autoexecute ? "enabled" : "disabled").")
+            if self.autoexecute {
+                // If autoexecute was previously disabled, execution may need to catch up
+                if self.currentPc == self.pausedPc {
+                    // The program counter is already current; don't call resumeExecution()
+                    print("Auto-execute of instructions enabled.")
+                } else {
+                    print("Auto-execute of instructions enabled.", terminator: " ")
+                    resumeExecution()
+                }
+            } else {
+                print("Auto-execute of instructions disabled.")
+                self.pausedPc = self.currentPc
+            }
         case .Execute:
             // Run commands from wherever the user last disabled auto-execute
             if self.autoexecute {
-                print("Auto-execute is enabled. No queued instructions to execute.")
+                print("Auto-execute is enabled. No unexecuted instructions to execute.")
             } else {
                 resumeExecution()
             }
@@ -165,22 +173,29 @@ class REPL {
             // Toggle current verbosity setting
             self.verbose = !self.verbose
             print("Verbose instruction parsing \(self.verbose ? "enabled" : "disabled").")
+        case .Status:
+            print("Current interpreter settings:")
+            print("\tVerbose \(self.verbose ? "enabled" : "disabled").")
+            print("\tAuto-dump \(self.autodump ? "enabled" : "disabled").")
+            print("\tAuto-execute \(self.autoexecute ? "enabled" : "disabled").")
+            print("\tTrace \(self.trace ? "enabled" : "disabled").")
         case .Help:
             // Display the help message
             print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.format(PrintOption.HexWith0x.rawValue))>'")
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
             print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Valid commands are:")
-            print("\tautoexecute/ae: toggle auto-execution of instructions; either run them as they are entered, or queue them up for a later execute command.")
-            print("\texecute/exec/ex/e: resume execution of instructions if it was previously paused by disabling auto-execution (auto-execution setting will remain off afterwards).")
+            print("\tautoexecute/ae: toggle auto-execution of entered instructions.")
+            print("\texecute/exec/ex/e: execute all instructions previously paused by disabling auto-execution.")
             print("\ttrace/t: print every instruction as it is executed.")
             print("\tverbose/v: toggle verbose parsing of instructions.")
-            print("\tlabel/l: print all labels currently known to the system as well as their locations.")
+            print("\tlabel/l: print all labels as well as their locations.")
             print("\tdump/d/registers/register/reg/r: print the values of all registers.")
             print("\tautodump/ad: toggle auto-dump of registers after execution of every instruction.")
             print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
             print("\toctal/oct: set register dumps to print out values in octal (base 8).")
             print("\tbinary/bin: set register dumps to print out values in binary (base 2).")
+            print("\tstatus/settings/s: display current interpreter settings.")
             print("\thelp/h/?: display this message.")
             print("\tabout: display information about this software.")
             print("\tnoop/n: do nothing.")
@@ -218,7 +233,7 @@ class REPL {
                 let result = op.operation!(rsValue, rtValue)
                 self.registers.set(rd.name, result)
             } else if op.type == .ComplexInstruction && op.bigOperation != nil {
-                // This is a mult/div instruction
+                // This is a mult/div instruction, need to modify hi/lo
                 let result = op.bigOperation!(rsValue, rtValue)
                 let hiValue = Int32(result >> 32) // Upper 32 bits
                 let loValue = Int32(result & 0xFFFFFFFF) // Lower 32 bits
@@ -248,6 +263,7 @@ class REPL {
         if self.autodump {
             executeCommand(.Dump)
         }
+        self.lastExecutedInstruction = instruction
     }
     
     func findDuplicateLabels(labels: [String]) -> [String] {

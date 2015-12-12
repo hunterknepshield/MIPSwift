@@ -25,18 +25,14 @@ class Instruction: CustomStringConvertible {
     let location: Int32
     var labels = [String]()
     let type: InstructionType
-    var previous: Instruction? {
-        didSet {
-            self.previous?.next = self
-        }
-    }
+    var previous: Instruction?
     var next: Instruction?
     var description: String { get { return self.location.format(PrintOption.HexWith0x.rawValue) + " " + self.rawString } }
     
     init(string: String, location: Int32, previous: Instruction?, verbose: Bool) {
         self.rawString = string
         self.location = location
-        self.previous = previous
+        self.previous = previous // Set self.previous?.next = self at the end of init
         
         if (verbose) {
             print("Previous instruction: \((self.previous == nil ? "(none)" : self.previous?.description)!)")
@@ -164,5 +160,6 @@ class Instruction: CustomStringConvertible {
             // Unable to construct an Operation
             self.type = .Invalid
         }
+        self.previous?.next = self // Has to be done down here after all other fields are initialized
     }
 }

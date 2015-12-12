@@ -142,12 +142,12 @@ struct Operation {
             self.numImmediates = 0
         case "mult":
             self.type = .ComplexInstruction
-            self.bigOperation = { return Int64($0*$1) }
+            self.bigOperation = { return Int64($0)*Int64($1) }
             self.numRegisters = 2
             self.numImmediates = 0
         case "multu":
             self.type = .ComplexInstruction
-            self.bigOperation = { return Int64(UInt32($0)*UInt32($1)) }
+            self.bigOperation = { return Int64(UInt64($0)*UInt64($1)) }
             self.numRegisters = 2
             self.numImmediates = 0
         case "div":
@@ -166,7 +166,7 @@ struct Operation {
                 let u2 = UInt32($1)
                 let quotient = u1 / u2 // To be stored in lo
                 let remainder = u1 % u2 // To be stored in hi
-                return Int64(remainder << 32) | Int64(quotient)
+                return Int64(remainder) << 32 | Int64(quotient)
             }
             self.numRegisters = 2
             self.numImmediates = 0

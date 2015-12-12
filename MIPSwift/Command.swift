@@ -23,6 +23,7 @@ enum Command {
     case Decimal
     case Octal
     case Binary
+    case Status
     case Help
     case About
     case NoOp
@@ -58,6 +59,8 @@ enum Command {
             self = .Octal
         case "bin", "binary":
             self = .Binary
+        case "s", "settings", "status":
+            self = .Status
         case "help", "h", "?":
             self = .Help
         case "about":

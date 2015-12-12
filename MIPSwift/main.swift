@@ -9,4 +9,8 @@
 import Foundation
 
 print("MIPSwift v\(mipswiftVersion)")
-_ = REPL()
+var developerOptions = REPLOptions()
+developerOptions.autoexecute = false
+developerOptions.autodump = true
+developerOptions.trace = true
+_ = REPL(options: developerOptions)
