@@ -43,6 +43,7 @@
 		5AA61BB21C195244007F1409 /* MIPSwift */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MIPSwift; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AA61BB51C195244007F1409 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		5AA61BC01C19529B007F1409 /* RegisterFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RegisterFile.swift; sourceTree = "<group>"; };
+		5AA9EF241C1C0E4500D24058 /* LICENSE.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		5AAE644E1C1B651C00340245 /* Regex.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Regex.swift; sourceTree = "<group>"; };
 		5AE8A8A51C1A2022002F07DC /* Register.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Register.swift; sourceTree = "<group>"; };
 		5AE8A8A71C1A2036002F07DC /* Immediate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Immediate.swift; sourceTree = "<group>"; };
@@ -63,6 +64,7 @@
 		5AA61BA91C195244007F1409 = {
 			isa = PBXGroup;
 			children = (
+				5AA9EF241C1C0E4500D24058 /* LICENSE.txt */,
 				5AA61BB41C195244007F1409 /* MIPSwift */,
 				5AA61BB31C195244007F1409 /* Products */,
 			);

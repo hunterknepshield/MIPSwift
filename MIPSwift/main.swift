@@ -9,4 +9,4 @@
 import Foundation
 
 print("MIPSwift v\(mipswiftVersion)")
-REPL().run()
+_ = REPL()

@@ -21,7 +21,7 @@ class REPL {
     var trace = false
     
     init(options: REPLOptions = REPLOptions()) {
-        print("Initializing REPL...")
+        print("Initializing REPL...", terminator: " ")
         self.registers.set(pc.name, currentPc)
         self.verbose = options.verbose
         self.autodump = options.autodump
@@ -36,9 +36,11 @@ class REPL {
         }
         self.registers.printOption = options.printSetting
         
+        self.run()
     }
     
     func run() {
+        print("Ready to run. Type '\(commandBeginning)help' for more.")
         var previousInstruction: Instruction?
         while true {
             // Print the prompt
@@ -134,7 +136,7 @@ class REPL {
         case .Execute:
             // Run commands from wherever the user last disabled auto-execute
             if self.autoexecute {
-                print("Auto-execute is enabled. No additional instructions to execute.")
+                print("Auto-execute is enabled. No queued instructions to execute.")
             } else {
                 resumeExecution()
             }
@@ -162,11 +164,31 @@ class REPL {
         case .Verbose:
             // Toggle current verbosity setting
             self.verbose = !self.verbose
-            print("Verbose parsing \(self.verbose ? "enabled" : "disabled").")
+            print("Verbose instruction parsing \(self.verbose ? "enabled" : "disabled").")
         case .Help:
-            // Display the help menu
-            // TODO more helpful stuff here
-            print("MIPSwift v\(mipswiftVersion)")
+            // Display the help message
+            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.format(PrintOption.HexWith0x.rawValue))>'")
+            print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
+            print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Valid commands are:")
+            print("\tautoexecute/ae: toggle auto-execution of instructions; either run them as they are entered, or queue them up for a later execute command.")
+            print("\texecute/exec/ex/e: resume execution of instructions if it was previously paused by disabling auto-execution (auto-execution setting will remain off afterwards).")
+            print("\ttrace/t: print every instruction as it is executed.")
+            print("\tverbose/v: toggle verbose parsing of instructions.")
+            print("\tlabel/l: print all labels currently known to the system as well as their locations.")
+            print("\tdump/d/registers/register/reg/r: print the values of all registers.")
+            print("\tautodump/ad: toggle auto-dump of registers after execution of every instruction.")
+            print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
+            print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
+            print("\toctal/oct: set register dumps to print out values in octal (base 8).")
+            print("\tbinary/bin: set register dumps to print out values in binary (base 2).")
+            print("\thelp/h/?: display this message.")
+            print("\tabout: display information about this software.")
+            print("\tnoop/n: do nothing.")
+            print("\texit/quit/q: exit the interpreter.")
+        case .About:
+            // Display information about the interpreter
+            print("MIPSwift v\(mipswiftVersion): a MIPS interpreter written in Swift by Hunter Knepshield.")
+            print("Modification and redistribution of this software is permitted under the MIT License. See LICENSE.txt for more information.")
         case .NoOp:
             // Do nothing
             break
@@ -211,6 +233,9 @@ class REPL {
             assertionFailure("J-type instructions unimplemented: \(op) \(label).")
         case .NonExecutable:
             // Assume all housekeeping (i.e. label assignment) has already happened
+            if self.trace {
+                print(instruction)
+            }
             return
         case .Invalid:
             // Should never happen

@@ -15,17 +15,18 @@ enum Command {
     case AutoExecute
     case Execute
     case Trace
-    case Dump
-    case Label
-    case AutoDump
-    case Exit
     case Verbose
-    case Help
-    case NoOp
+    case Label
+    case Dump
+    case AutoDump
     case Hex
     case Decimal
     case Octal
     case Binary
+    case Help
+    case About
+    case NoOp
+    case Exit
     case Invalid(String)
     
     init(_ string: String) {
@@ -41,20 +42,14 @@ enum Command {
             self = .Execute
         case "trace", "t":
             self = .Trace
-        case "dump", "d", "reg", "r":
-            self = .Dump
-        case "label", "l":
-            self = .Label
-        case "autodump", "ad":
-            self = .AutoDump
-        case "exit", "quit", "q":
-            self = .Exit
         case "verbose", "v":
             self = .Verbose
-        case "help", "h", "?":
-            self = .Help
-        case "noop", "n", "":
-            self = .NoOp
+        case "label", "l":
+            self = .Label
+        case "dump", "d", "registers", "register", "reg", "r":
+            self = .Dump
+        case "autodump", "ad":
+            self = .AutoDump
         case "hex", "hexadecimal":
             self = .Hex
         case "dec", "decimal":
@@ -63,6 +58,14 @@ enum Command {
             self = .Octal
         case "bin", "binary":
             self = .Binary
+        case "help", "h", "?":
+            self = .Help
+        case "about":
+            self = .About
+        case "noop", "n", "":
+            self = .NoOp
+        case "exit", "quit", "q":
+            self = .Exit
         default:
             self = .Invalid(strippedString)
         }
