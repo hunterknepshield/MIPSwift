@@ -62,6 +62,8 @@ extension Int32 {
                 case "d", "D":
                     binaryString += "1101"
                 case "e", "E":
+                    binaryString += "1110"
+                case "f", "F":
                     binaryString += "1111"
                 default:
                     assertionFailure("Invalid character in hex string: \(char)")
