@@ -10,8 +10,10 @@ import Foundation
 
 // General constants
 let mipswiftVersion = 1.0
+let commandLineOptions = "[-d] [-noae] [-f filename]"
 let beginningPc: Int32 = 0x00400000
 let beginningMem: Int32 = 0x10000000
+let stdIn = NSFileHandle.fileHandleWithStandardInput()
 
 // Constants to aid with parsing logic
 let immutableRegisters = ["hi", "$hi", "lo", "$lo", "pc", "$pc", "$zero", "$0"]
@@ -22,9 +24,6 @@ let zero = Register("$zero", user: false)!
 let pc = Register("pc", user: false)!
 let hi = Register("hi", user: false)!
 let lo = Register("lo", user: false)!
-
-// Standard input
-let keyboard = NSFileHandle.fileHandleWithStandardInput()
 
 // Strings to help with string parsing
 let commandBeginning = ":"

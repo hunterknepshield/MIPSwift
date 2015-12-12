@@ -212,7 +212,7 @@ class RegisterFile: CustomStringConvertible {
             contents += "$zero: \(zero.format(format))  $at: \(at.format(format))  $v0: \(v0.format(format))  $v1: \(v1.format(format))\n"
             contents += "  $a0: \(a0.format(format))  $a1: \(a1.format(format))  $a2: \(a2.format(format))  $a3: \(a3.format(format))\n"
             contents += "  $t0: \(t0.format(format))  $t1: \(t1.format(format))  $t2: \(t2.format(format))  $t3: \(t3.format(format))\n"
-            contents += "  $t4: \(t4.format(format))  $t5: \(t4.format(format))  $t6: \(t6.format(format))  $t7: \(t7.format(format))\n"
+            contents += "  $t4: \(t4.format(format))  $t5: \(t5.format(format))  $t6: \(t6.format(format))  $t7: \(t7.format(format))\n"
             contents += "  $s0: \(s0.format(format))  $s1: \(s1.format(format))  $s2: \(s2.format(format))  $s3: \(s3.format(format))\n"
             contents += "  $s4: \(s4.format(format))  $s5: \(s5.format(format))  $s6: \(s6.format(format))  $s7: \(s7.format(format))\n"
             contents += "  $t8: \(t8.format(format))  $t9: \(t9.format(format))  $k0: \(k0.format(format))  $k1: \(k1.format(format))\n"

@@ -9,6 +9,8 @@
 import Foundation
 
 class REPL {
+    var inputSource: NSFileHandle
+    var usingFile: Bool
     var registers = RegisterFile()
     var currentPc = beginningPc // To avoid constantly getting and setting self.registers.pc
     var pausedPc: Int32? // Keep track of where execution was last paused
@@ -21,7 +23,7 @@ class REPL {
     var autoexecute = true
     var trace = false
     
-    init(options: REPLOptions = REPLOptions()) {
+    init(options: REPLOptions) {
         print("Initializing REPL...", terminator: " ")
         self.registers.set(pc.name, currentPc)
         self.verbose = options.verbose
@@ -29,78 +31,101 @@ class REPL {
         self.autoexecute = options.autoexecute
         self.trace = options.trace        
         self.registers.printOption = options.printSetting
+        self.inputSource = options.inputSource
+        self.usingFile = options.usingFile
         
         self.run()
     }
     
     func run() {
-        print("Ready to run. Type '\(commandBeginning)help' for more.")
+        if self.usingFile {
+            print("Reading file.")
+        } else {
+            print("Ready to read input. Type '\(commandBeginning)help' for more.")
+        }
         var previousInstruction: Instruction?
         while true {
-            // Print the prompt
-            print("\(currentPc.format(PrintOption.HexWith0x.rawValue))> ", terminator: "") // Prints PC without a newline
-            let input = readInput() // Read input (whitespace is already trimmed from either end)
-            if input.rangeOfString(commandBeginning)?.minElement() == input.startIndex || input == "" {
-                // This is a command, not an instruction; parse it as such
-                executeCommand(Command(input))
-            } else {
-                // This is an instruction, not a command; parse it as such
-                let instruction = Instruction(string: input, location: currentPc, previous: previousInstruction, verbose: verbose)
-                switch(instruction.type) {
-                case .Invalid:
-                    // This wasn't a valid instruction; don't store/execute anything
-                    print("Invalid instruction: \(instruction)")
-                    continue
-                case .NonExecutable:
-                    // This line contained only labels and/or comments; don't execute anything
-                    let dupes = findDuplicateLabels(instruction.labels)
-                    if dupes.count > 0 {
-                        // There was at least one duplicate label; don't store/execute anything
-                        print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-                        var counter = 0
-                        let end = dupes.count
-                        dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
-                        continue
-                    }
-                default:
-                    // Increment the program counter, store its new value in the register file, and then execute
-                    let dupes = findDuplicateLabels(instruction.labels)
-                    if dupes.count > 0 {
-                        // There was at least one duplicate label; don't store/execute anything
-                        print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-                        var counter = 0
-                        let end = dupes.count
-                        dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
-                        continue
-                    }
-                    locationsToInstructions[self.currentPc] = instruction
-                    
-                    // Increment the program counter by 4 (may change again with J-type)
-                    let newPc = self.currentPc + 4
-                    self.registers.set(pc.name, newPc)
-                    self.currentPc = newPc
-                    
-                    if self.autoexecute {
-                        executeInstruction(instruction)
-                    }
-                }
-                // Store this instruction and map any labels
-                if self.firstInstruction == nil {
-                    self.firstInstruction = instruction
-                }
-                previousInstruction = instruction
-                instruction.labels.forEach({ labelsToLocations[$0] = instruction.location }) // Store labels in the dictionary
+            if !self.usingFile {
+                // Print the prompt if reading from stdIn
+                print("\(currentPc.format(PrintOption.HexWith0x.rawValue))> ", terminator: "") // Prints PC without a newline
             }
+            let input = readInput() // Read input (whitespace is already trimmed from either end)
+            input.forEach({ inputString in
+                if inputString.rangeOfString(commandBeginning)?.minElement() == inputString.startIndex || inputString == "" {
+                    // This is a command, not an instruction; parse it as such
+                    executeCommand(Command(inputString))
+                } else {
+                    // This is an instruction, not a command; parse it as such
+                    let instruction = Instruction(string: inputString, location: currentPc, previous: previousInstruction, verbose: verbose)
+                    switch(instruction.type) {
+                    case .Invalid:
+                        // This wasn't a valid instruction; don't store/execute anything
+                        print("Invalid instruction: \(instruction)")
+                        return
+                    case .NonExecutable:
+                        // This line contained only labels and/or comments; don't execute anything
+                        let dupes = findDuplicateLabels(instruction.labels)
+                        if dupes.count > 0 {
+                            // There was at least one duplicate label; don't store/execute anything
+                            print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
+                            var counter = 0
+                            let end = dupes.count
+                            dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
+                            return
+                        }
+                    default:
+                        // Increment the program counter, store its new value in the register file, and then execute
+                        let dupes = findDuplicateLabels(instruction.labels)
+                        if dupes.count > 0 {
+                            // There was at least one duplicate label; don't store/execute anything
+                            print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
+                            var counter = 0
+                            let end = dupes.count
+                            dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
+                            return
+                        }
+                        locationsToInstructions[self.currentPc] = instruction
+                        
+                        // Increment the program counter by 4
+                        // Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
+                        let newPc = self.currentPc + 4
+                        self.currentPc = newPc
+                        
+                        if self.autoexecute {
+                            executeInstruction(instruction)
+                        }
+                    }
+                    // Store this instruction and map any labels
+                    if self.firstInstruction == nil {
+                        self.firstInstruction = instruction
+                    }
+                    previousInstruction = instruction
+                    instruction.labels.forEach({ labelsToLocations[$0] = instruction.location }) // Store labels in the dictionary
+                }
+            })
         }
     }
     
-    func readInput() -> String {
-        let inputData = keyboard.availableData
-        let inputString = NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
-        if !inputString.canBeConvertedToEncoding(NSASCIIStringEncoding) {
-            return ":\(inputString)"
+    func readInput() -> [String] {
+        let inputData = self.inputSource.availableData
+        if inputData.length == 0 && self.usingFile {
+            // Reached the end of file, switch back to standard input
+            print("End of file reached. Switching back to standard input.")
+            self.inputSource = stdIn
+            self.usingFile = false
+            return [":noop"]
         }
-        return inputString
+        let inputString = NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
+        var returnedArray: [String]
+        if self.usingFile {
+            // inputData contains the entire file's contents; NSFileHandles do not read files line by line
+            returnedArray = inputString.componentsSeparatedByCharactersInSet(NSCharacterSet.newlineCharacterSet())
+        } else {
+            returnedArray = [inputString]
+        }
+        returnedArray = returnedArray.filter({ return !$0.isEmpty }) // Remove any empty lines
+        returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : ":\(inputString)" }) // If any strings contain non-ASCII characters, make them invalid commands
+        return returnedArray
     }
     
     func resumeExecution() {
@@ -181,9 +206,11 @@ class REPL {
             print("\tTrace \(self.trace ? "enabled" : "disabled").")
         case .Help:
             // Display the help message
-            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.format(PrintOption.HexWith0x.rawValue))>'")
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
-            print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Valid commands are:")
+            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.format(PrintOption.HexWith0x.rawValue))>'")
+            print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Type '\(commandBeginning)commands' to see all commands.")
+        case .Commands:
+            print("All interpreter commands:")
             print("\tautoexecute/ae: toggle auto-execution of entered instructions.")
             print("\texecute/exec/ex/e: execute all instructions previously paused by disabling auto-execution.")
             print("\ttrace/t: print every instruction as it is executed.")
@@ -196,8 +223,9 @@ class REPL {
             print("\toctal/oct: set register dumps to print out values in octal (base 8).")
             print("\tbinary/bin: set register dumps to print out values in binary (base 2).")
             print("\tstatus/settings/s: display current interpreter settings.")
-            print("\thelp/h/?: display this message.")
+            print("\thelp/h/?: display the help message.")
             print("\tabout: display information about this software.")
+            print("\tcommands/cmds/c: display this message.")
             print("\tnoop/n: do nothing.")
             print("\texit/quit/q: exit the interpreter.")
         case .About:
@@ -219,12 +247,24 @@ class REPL {
         case .Octal:
             self.registers.printOption = .Octal
             print("Outputting register file using octal print formatting.")
+        case .UseFile(let filename):
+            // The user has specified an input file to read
+            if let openFile = NSFileHandle(forReadingAtPath: filename) {
+                self.usingFile = true
+                self.inputSource = openFile
+                self.autoexecute = false // Disable for good measure
+                print("Opened file: \(filename)")
+            } else {
+                print("Unable to open file: \(filename).")
+            }
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }
     }
         
     func executeInstruction(instruction: Instruction) {
+        self.registers.set(pc.name, instruction.location + 4) // PC = PC + 4
+        
         switch(instruction.type) {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
@@ -253,7 +293,7 @@ class REPL {
             }
             return
         case .Invalid:
-            // Should never happen
+            // Should never happen; invalid instructions are dummped in the REPL and never executed
             assertionFailure("Invalid instruction: \(instruction)")
         }
         

@@ -26,7 +26,9 @@ enum Command {
     case Status
     case Help
     case About
+    case Commands
     case NoOp
+    case UseFile(String)
     case Exit
     case Invalid(String)
     
@@ -36,7 +38,8 @@ enum Command {
             return
         }
         let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
-        switch(strippedString) {
+        let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet()) // In case there are arguments to this command
+        switch(commandAndArgs[0]) {
         case "autoexecute", "ae":
             self = .AutoExecute
         case "execute", "exec", "ex", "e":
@@ -63,10 +66,18 @@ enum Command {
             self = .Status
         case "help", "h", "?":
             self = .Help
+        case "commands", "cmds", "c":
+            self = .Commands
         case "about":
             self = .About
         case "noop", "n", "":
             self = .NoOp
+        case "file", "use", "usefile", "open", "openfile", "o", "f":
+            if commandAndArgs.count == 1 {
+                self = .Invalid("No file name supplied.")
+            } else {
+                self = .UseFile(commandAndArgs[1])
+            }
         case "exit", "quit", "q":
             self = .Exit
         default:

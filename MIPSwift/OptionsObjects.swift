@@ -14,6 +14,8 @@ struct REPLOptions {
     var autoexecute = true
     var trace = false
     var printSetting: PrintOption = .Hex
+    var inputSource = stdIn
+    var usingFile = false
 }
 
 enum PrintOption: String {
