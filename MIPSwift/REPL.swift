@@ -86,7 +86,7 @@ class REPL {
                         
                         // Increment the program counter by 4
                         // Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
-                        let newPc = self.currentPc + 4
+                        let newPc = self.currentPc + instruction.pcIncrement
                         self.currentPc = newPc
                         
                         if self.autoexecute {
@@ -108,7 +108,7 @@ class REPL {
         let inputData = self.inputSource.availableData
         if inputData.length == 0 && self.usingFile {
             // Reached the end of file, switch back to standard input
-            print("End of file reached. Switching back to standard input.")
+            print("End of file reached. Switching back to standard input. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
             self.inputSource = stdIn
             self.usingFile = false
             return [":noop"]
@@ -154,7 +154,7 @@ class REPL {
             if self.autoexecute {
                 // If autoexecute was previously disabled, execution may need to catch up
                 if self.currentPc == self.pausedPc {
-                    // The program counter is already current; don't call resumeExecution()
+                    // The program counter is already current, don't call resumeExecution()
                     print("Auto-execute of instructions enabled.")
                 } else {
                     print("Auto-execute of instructions enabled.", terminator: " ")
@@ -217,10 +217,10 @@ class REPL {
             print("Verbose instruction parsing \(self.verbose ? "enabled" : "disabled").")
         case .Status:
             print("Current interpreter settings:")
-            print("\tVerbose instruction parsing is \(self.verbose ? "enabled" : "disabled").")
-            print("\tAuto-dump of registers after instruction execution is \(self.autodump ? "enabled" : "disabled").")
-            print("\tAuto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
-            print("\tTrace printing of instructions after execution is \(self.trace ? "enabled" : "disabled").")
+            print("\t\(self.verbose ? "[X]" : "[ ]") Verbose instruction parsing is \(self.verbose ? "enabled" : "disabled").")
+            print("\t\(self.autodump ? "[X]" : "[ ]") Auto-dump of registers after instruction execution is \(self.autodump ? "enabled" : "disabled").")
+            print("\t\(self.autoexecute ? "[X]" : "[ ]") Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+            print("\t\(self.trace ? "[X]" : "[ ]") Trace printing of instructions after execution is \(self.trace ? "enabled" : "disabled").")
             print("\tRegisters will be printed using \(self.registers.printOption.description.lowercaseString).")
         case .Help:
             // Display the help message
@@ -286,8 +286,9 @@ class REPL {
     }
         
     func executeInstruction(instruction: Instruction) {
-        self.registers.set(pc.name, instruction.location + 4) // PC = PC + 4
-        
+        // Update the program counter
+        self.registers.set(pc.name, instruction.location + instruction.pcIncrement)
+        // Determine how to execute the instruction
         switch(instruction.type) {
         case .rType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
@@ -307,8 +308,24 @@ class REPL {
             let rsValue = registers.get(rs.name)
             let result = op.operation!(rsValue, imm.signExtended)
             self.registers.set(rt.name, result)
-        case .jType(let op, let label):
-            assertionFailure("J-type instructions unimplemented: \(op) \(label).")
+        case .jType(let op, let destination):
+            // Jump to the destination
+            let destinationLocation: Int32
+            switch(destination) {
+            case .Left(let reg):
+                destinationLocation = self.registers.get(reg.name)
+            case .Right(let label):
+                if let loc = labelsToLocations[label] {
+                    destinationLocation = loc
+                } else {
+                    assertionFailure("Undefined label: \(label)")
+                    destinationLocation = INT32_MAX
+                }
+            }
+            // op.operation is used to compute the new
+            let newRa = op.operation!(self.registers.get(ra.name), self.registers.get(pc.name))
+            self.registers.set(ra.name, newRa)
+            self.registers.set(pc.name, destinationLocation)
         case .NonExecutable:
             // Assume all housekeeping (i.e. label assignment) has already happened
             if self.trace {
@@ -319,7 +336,7 @@ class REPL {
             // Should never happen; invalid instructions are dummped in the REPL and never executed
             assertionFailure("Invalid instruction: \(instruction)")
         }
-        
+        // Debug option checking
         if self.trace {
             print(instruction)
         }

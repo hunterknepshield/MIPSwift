@@ -19,12 +19,13 @@ enum OperationType {
 }
 
 struct Operation {
-    var name: String
-    var type: OperationType
-    var numRegisters: Int
-    var numImmediates: Int
+    let name: String
+    let type: OperationType
+    let numRegisters: Int
+    let numImmediates: Int
     var operation: ((Int32, Int32) -> Int32)?
     var bigOperation: ((Int32, Int32) -> Int64)?
+    var pcIncrement: Int32 = 4 // All simple instructions increment pc by 4
     
     // Attempt to initialize an operation from a string; will fail if instruction is invalid or unimplemented
     init?(_ string: String) {
@@ -124,12 +125,39 @@ struct Operation {
             self.numImmediates = 1
         // Memory operations
             
+        // Jump instructions
+        case "j":
+            self.type = .Jump
+            self.numRegisters = 0
+            self.numImmediates = 1
+            let op: ((Int32, Int32) -> Int32) = { return $0.0 }
+            // Not entirely sure why this is needed, but the compiler won't accept this simpler solution...
+            // self.operation = { return $0 }
+            self.operation = op // $ra = unchanged
+        case "jal":
+            self.type = .Jump
+            self.numRegisters = 0
+            self.numImmediates = 1
+            self.operation = { return $1 } // $ra = pc
+            self.pcIncrement = 8
+        case "jr":
+            self.type = .Jump
+            self.numRegisters = 1
+            self.numImmediates = 0
+            let op: ((Int32, Int32) -> Int32) = { return $0.0 }
+            self.operation = op // $ra = unchanged
+        case "jalr":
+            self.type = .Jump
+            self.numRegisters = 1
+            self.numImmediates = 0
+            self.operation = { return $1 } // $ra = pc
         // More complex instructions, mostly pseudo-instructions
         case "li":
             self.type = .ComplexInstruction
             self.operation = (+)
             self.numRegisters = 1
             self.numImmediates = 1
+            self.pcIncrement = 8
         case "move":
             self.type = .ComplexInstruction
             self.operation = (+)

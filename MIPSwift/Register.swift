@@ -12,11 +12,18 @@ struct Register {
     // Representation of a source/destination register
     var name: String
     
-    init?(_ name: String, user: Bool = true) {
-        if user && immutableRegisters.contains(name) {
+    // Attempt to initialize a register from a given name,
+    // fails if the user is attempting to write to a register inaccessible to them
+    init?(_ name: String, writing: Bool, user: Bool = true) {
+        if user && writing && immutableRegisters.contains(name) {
             print("User may not modify register: \(name)")
             return nil
-        } else if !validRegisters.contains(name) {
+        }
+        if user && uninstantiableRegisters.contains(name) {
+            print("User may not access register: \(name)")
+            return nil
+        }
+        if !validRegisters.contains(name) {
             print("Invalid register reference: \(name)")
             return nil
         }
