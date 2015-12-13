@@ -22,8 +22,8 @@ let validRegisters = ["$zero", "$0", "$at", "$1", "$v0", "$2", "$v1", "$3", "$a0
 
 // Register objects that are used often and/or inaccessible to the user
 let zero = Register("$zero", writing: true, user: false)!
+let ra = Register("$ra", writing: true, user: false)!
 let pc = Register("pc", writing: true, user: false)!
-let ra = Register("ra", writing: true, user: false)!
 let hi = Register("hi", writing: true, user: false)!
 let lo = Register("lo", writing: true, user: false)!
 

@@ -13,10 +13,11 @@ import Foundation
 
 // Representations of each type of MIPS instruction
 enum InstructionType {
-    case rType(Operation, Register, Register, Register)
-    case iType(Operation, Register, Register, Immediate)
-    case jType(Operation, Either<Register, String>) // May jump to a label or a register
+    case RType(Operation, Register, Register, Register)
+    case IType(Operation, Register, Register, Immediate)
+    case JType(Operation, Either<Register, String>) // May jump to a label or a register
     // Technically, J-type instructions store an integer value that's the offset from the current PC
+    case Syscall // System call; e.g. reading input, printing, etc.
     case NonExecutable // This line only contains labels and/or comments
     case Invalid // Malformed instruction
 }
@@ -132,24 +133,25 @@ class Instruction: CustomStringConvertible {
             switch(operation.type) {
             case .ALUR: // All ALU-R operations of format op, rd, rs, rt
                 if let reg1 = Register(args[1], writing: true), reg2 = Register(args[2], writing: false), reg3 = Register(args[3], writing: false) {
-                    self.type = InstructionType.rType(operation, reg1, reg2, reg3)
+                    self.type = InstructionType.RType(operation, reg1, reg2, reg3)
                 } else {
                     self.type = .Invalid
                 }
             case .ALUI: // All ALU-I operations of format op, rt, rs, imm
                 if let reg1 = Register(args[1], writing: true), reg2 = Register(args[2], writing: false), imm = Immediate(string: args[3]) {
-                    self.type = InstructionType.iType(operation, reg1, reg2, imm)
+                    self.type = InstructionType.IType(operation, reg1, reg2, imm)
                 } else {
                     self.type = .Invalid
                 }
             // TODO memory
             case .Jump: // All J-type operations of format op, dest
-                if let reg1 = Register(args[1], writing: false) {
+                if validRegisters.contains(args[1]), // Prevents printing of the "invalid register reference" message
+                    let reg1 = Register(args[1], writing: false) {
                     // Jumping to a register
-                    self.type = .jType(operation, .Left(reg1))
+                    self.type = .JType(operation, .Left(reg1))
                 } else if validLabelRegex.test(args[1]) {
                     // Jumping to a label
-                    self.type = .jType(operation, .Right(args[1]))
+                    self.type = .JType(operation, .Right(args[1]))
                 } else {
                     // Unable to determine a valid location to jump to
                     self.type = .Invalid
@@ -161,37 +163,40 @@ class Instruction: CustomStringConvertible {
                 case "li":
                     // Transform to an addi ($reg1 = $zero + imm)
                     if let reg1 = Register(args[1], writing: true), imm = Immediate(string: args[2]) {
-                        self.type = InstructionType.iType(Operation("addi")!, reg1, zero, imm)
+                        self.type = InstructionType.IType(Operation("addi")!, reg1, zero, imm)
                     } else {
                         self.type = .Invalid
                     }
                 case "move":
                     // Transform to an add ($reg1 = $reg2 + $zero)
+                    // This is also the actual pseudo instruction transformation
                     if let reg1 = Register(args[1], writing: true), reg2 = Register(args[2], writing: false) {
-                        self.type = InstructionType.rType(Operation("add")!, reg1, reg2, zero)
+                        self.type = InstructionType.RType(Operation("add")!, reg1, reg2, zero)
                     } else {
                         self.type = .Invalid
                     }
                 case "mfhi":
                     // Transform to an add ($reg1 = $hi + $zero)
                     if let reg1 = Register(args[1], writing: true) {
-                        self.type = InstructionType.rType(Operation("add")!, reg1, hi, zero)
+                        self.type = InstructionType.RType(Operation("add")!, reg1, hi, zero)
                     } else {
                         self.type = .Invalid
                     }
                 case "mflo":
                     // Transform to an add ($reg1 = $lo + $zero)
                     if let reg1 = Register(args[1], writing: true) {
-                        self.type = InstructionType.rType(Operation("add")!, reg1, lo, zero)
+                        self.type = InstructionType.RType(Operation("add")!, reg1, lo, zero)
                     } else {
                         self.type = .Invalid
                     }
                 case "mult", "multu", "div", "divu":
                     if let reg1 = Register(args[1], writing: false), reg2 = Register(args[2], writing: false) {
-                        self.type = InstructionType.rType(operation, zero, reg1, reg2)
+                        self.type = InstructionType.RType(operation, zero, reg1, reg2)
                     } else {
                         self.type = .Invalid
                     }
+                case "syscall":
+                    self.type = .Syscall
                 default:
                     self.type = .Invalid
                 }

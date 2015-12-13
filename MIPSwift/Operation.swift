@@ -152,6 +152,10 @@ struct Operation {
             self.numImmediates = 0
             self.operation = { return $1 } // $ra = pc
         // More complex instructions, mostly pseudo-instructions
+        case "syscall":
+            self.type = .ComplexInstruction
+            self.numRegisters = 0
+            self.numImmediates = 0
         case "li":
             self.type = .ComplexInstruction
             self.operation = (+)

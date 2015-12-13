@@ -33,8 +33,6 @@ class REPL {
         self.registers.printOption = options.printSetting
         self.inputSource = options.inputSource
         self.usingFile = options.usingFile
-        
-        self.run()
     }
     
     func run() {
@@ -109,11 +107,12 @@ class REPL {
         if inputData.length == 0 && self.usingFile {
             // Reached the end of file, switch back to standard input
             print("End of file reached. Switching back to standard input. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+            self.inputSource.closeFile()
             self.inputSource = stdIn
             self.usingFile = false
             return [":noop"]
         }
-        let inputString = NSString(data: inputData, encoding:NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
+        let inputString = NSString(data: inputData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
         var returnedArray: [String]
         if self.usingFile {
             // inputData contains the entire file's contents; NSFileHandles do not read files line by line
@@ -210,6 +209,10 @@ class REPL {
             print("Auto-dump \(self.autodump ? "enabled" : "disabled").")
         case .Exit:
             print("Exiting MIPSwift.")
+            if self.usingFile {
+                self.inputSource.closeFile()
+            }
+            stdIn.closeFile()
             exit(0)
         case .Verbose:
             // Toggle current verbosity setting
@@ -290,7 +293,7 @@ class REPL {
         self.registers.set(pc.name, instruction.location + instruction.pcIncrement)
         // Determine how to execute the instruction
         switch(instruction.type) {
-        case .rType(let op, let rd, let rs, let rt):
+        case .RType(let op, let rd, let rs, let rt):
             let rsValue = registers.get(rs.name)
             let rtValue = registers.get(rt.name)
             if op.type == .ALUR || op.operation != nil {
@@ -304,11 +307,11 @@ class REPL {
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
             }
-        case .iType(let op, let rt, let rs, let imm):
+        case .IType(let op, let rt, let rs, let imm):
             let rsValue = registers.get(rs.name)
             let result = op.operation!(rsValue, imm.signExtended)
             self.registers.set(rt.name, result)
-        case .jType(let op, let destination):
+        case .JType(let op, let destination):
             // Jump to the destination
             let destinationLocation: Int32
             switch(destination) {
@@ -322,10 +325,16 @@ class REPL {
                     destinationLocation = INT32_MAX
                 }
             }
-            // op.operation is used to compute the new
+            // op.operation is used to compute the (possibly) new return address
             let newRa = op.operation!(self.registers.get(ra.name), self.registers.get(pc.name))
             self.registers.set(ra.name, newRa)
             self.registers.set(pc.name, destinationLocation)
+            self.currentPc = destinationLocation
+            // TODO resume execution at currentPc
+        case .Syscall:
+            // This is a very complex operation that is based on various register values already set,
+            // including a0, v0, etc., and may return values back in various registers
+            executeSyscall()
         case .NonExecutable:
             // Assume all housekeeping (i.e. label assignment) has already happened
             if self.trace {
@@ -344,5 +353,41 @@ class REPL {
             executeCommand(.RegisterDump)
         }
         self.lastExecutedInstruction = instruction
+    }
+    
+    func executeSyscall() {
+        if let syscallCode = SyscallCode(rawValue: self.registers.get("$v0")) {
+            switch(syscallCode) {
+            case .PrintInt:
+                // Print the integer currently in $a0
+                print(self.registers.get("$a0"))
+            case .PrintString:
+                // Print the string that starts at address $a0 and go until '\0' is found
+                let address = self.registers.get("$a0")
+                print("TODO: read string at \(address)")
+            case .ReadInt:
+                // Read an integer from standard input and return it in $v0
+                // Maximum of 2147483647, minimum of -2147483648
+                let inputString: String = NSString(data: stdIn.availableData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
+                if let value = Int32(inputString) {
+                    self.registers.set("$v0", value)
+                } else {
+                    print("Invalid input for ReadInt syscall: \(inputString).")
+                }
+            case .Exit:
+                // The assembly program has exited, so exit the interpreter as well
+                print("Program terminated with exit code 0.")
+                self.executeCommand(.Exit)
+            case .Exit2:
+                // The assembly program has exited with exit code in $a0
+                print("Program terminated with exit code \(self.registers.get("$a0"))")
+                self.executeCommand(.Exit)
+            default:
+                print("Syscall code unimplemented: \(self.registers.get("$v0"))")
+            }
+        } else {
+            // Don't assert fail for now, just output
+            print("Invalid syscall code: \(self.registers.get("$v0"))")
+        }
     }
 }

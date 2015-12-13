@@ -41,12 +41,12 @@ for (index, argument) in args.enumerate() {
             let filename = args[index + 1]
             if let fileHandle = NSFileHandle(forReadingAtPath: filename) {
                 defaultOptions.inputSource = fileHandle
-                defaultOptions.usingFile = true
                 developerOptions.inputSource = fileHandle
-                developerOptions.usingFile = true
             } else {
                 assertionFailure("Unable to open file: \(filename)")
             }
+            defaultOptions.usingFile = true
+            developerOptions.usingFile = true
             // Also turn off auto-execute, as labels may be used before they're defined within a file
             defaultOptions.autoexecute = false
             // developerOptions.autoexecute is already false
@@ -65,5 +65,6 @@ if printUsage {
     print("\tnoae: start auto-execute off.")
     print("\tf file: open file instead of reading instructions from standard input.")
 } else {
-    _ = REPL(options: useDeveloperOptions ? developerOptions : defaultOptions)
+    let repl = REPL(options: useDeveloperOptions ? developerOptions : defaultOptions)
+    repl.run()
 }
