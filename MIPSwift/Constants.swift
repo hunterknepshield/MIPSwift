@@ -10,7 +10,7 @@ import Foundation
 
 // General constants
 let mipswiftVersion = 1.0
-let commandLineOptions = "[-d] [-noae] [-f filename]"
+let commandLineOptions = "[-d] [-noae] [-f file]"
 let beginningPc: Int32 = 0x00400000
 let beginningMem: Int32 = 0x10000000
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
@@ -27,6 +27,7 @@ let lo = Register("lo", user: false)!
 
 // Strings to help with string parsing
 let commandBeginning = ":"
+let directiveBeginning = "."
 let labelEnd = ":"
 let commentBeginning = "#"
 let validInstructionSeparators = "(), \t"

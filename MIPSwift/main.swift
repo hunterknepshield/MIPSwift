@@ -47,7 +47,7 @@ for (index, argument) in args.enumerate() {
             } else {
                 assertionFailure("Unable to open file: \(filename)")
             }
-            // Also turn off auto-execute, as labels may be used before they're defined
+            // Also turn off auto-execute, as labels may be used before they're defined within a file
             defaultOptions.autoexecute = false
             // developerOptions.autoexecute is already false
         } else {
@@ -61,6 +61,9 @@ for (index, argument) in args.enumerate() {
 
 if printUsage {
     print("Usage: \(args[0]) \(commandLineOptions)")
+    print("\td: start with 'developer' interpreter settings by default (auto-dump on, auto-execute off, trace on).")
+    print("\tnoae: start auto-execute off.")
+    print("\tf file: open file instead of reading instructions from standard input.")
 } else {
     _ = REPL(options: useDeveloperOptions ? developerOptions : defaultOptions)
 }
