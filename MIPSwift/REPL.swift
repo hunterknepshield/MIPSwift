@@ -47,7 +47,7 @@ class REPL {
         while true {
             if !self.usingFile {
                 // Print the prompt if reading from stdIn
-                print("\(currentPc.format(PrintOption.HexWith0x.rawValue))> ", terminator: "") // Prints PC without a newline
+                print("\(currentPc.toHexWith0x())> ", terminator: "") // Prints PC without a newline
             }
             let input = readInput() // Read input (whitespace is already trimmed from either end)
             input.forEach({ inputString in
@@ -64,24 +64,22 @@ class REPL {
                         return
                     case .NonExecutable:
                         // This line contained only labels and/or comments; don't execute anything
-                        let dupes = findDuplicateLabels(instruction.labels)
+                        let dupes = instruction.labels.filter({ return labelsToLocations[$0] != nil })
                         if dupes.count > 0 {
                             // There was at least one duplicate label; don't store/execute anything
                             print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
                             var counter = 0
-                            let end = dupes.count
-                            dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
+                            dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
                             return
                         }
                     default:
                         // Increment the program counter, store its new value in the register file, and then execute
-                        let dupes = findDuplicateLabels(instruction.labels)
+                        let dupes = instruction.labels.filter({ return labelsToLocations[$0] != nil })
                         if dupes.count > 0 {
                             // There was at least one duplicate label; don't store/execute anything
                             print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
                             var counter = 0
-                            let end = dupes.count
-                            dupes.forEach({ print($0, terminator: ++counter < end ? " " : "\n") })
+                            dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
                             return
                         }
                         locationsToInstructions[self.currentPc] = instruction
@@ -177,16 +175,35 @@ class REPL {
             // Toggle current trace setting
             self.trace = !self.trace
             print("Trace \(self.trace ? "enabled": "disabled").")
-        case .Dump:
+        case .RegisterDump:
             // Print the current contents of the register file
             print(registers)
-        case .Label:
+        case .Register(let name):
+            // Register name is already guaranteed to be valid (checked in Command construction)
+            let value = self.registers.get(name)
+            print("\(name): \(value.format(self.registers.printOption.rawValue))")
+        case .LabelDump:
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
-            let format = PrintOption.HexWith0x.rawValue
-            var counter = 0 // For determining whether to print a space or newline after each pair
-            let end = labelsToLocations.count
-            print("All labels currently stored: ", terminator: end == 0 ? "(none)\n" : "")
-            labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\($0.0): \($0.1.format(format))", terminator: ++counter < end ? " " : "\n") })
+            print("All labels currently stored: ", terminator: labelsToLocations.count == 0 ? "(none)\n" : "\n")
+            labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.toHexWith0x())") })
+        case .Label(let label):
+            // Print the location of the given label
+            if let location = labelsToLocations[label] {
+                print("\(label): \(location.toHexWith0x())")
+            } else {
+                print("\(label): (undefined)")
+            }
+        case .InstructionDump:
+            // Print all instructions currently stored
+            print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
+            locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1)") })
+        case .Instruction(let location):
+            // Print the instruction at the given location
+            if let instruction = locationsToInstructions[location] {
+                print("\t\(instruction)")
+            } else {
+                print("Invalid location: \(location.toHexWith0x())")
+            }
         case .AutoDump:
             // Toggle current auto-dump setting
             self.autodump = !self.autodump
@@ -200,14 +217,15 @@ class REPL {
             print("Verbose instruction parsing \(self.verbose ? "enabled" : "disabled").")
         case .Status:
             print("Current interpreter settings:")
-            print("\tVerbose \(self.verbose ? "enabled" : "disabled").")
-            print("\tAuto-dump \(self.autodump ? "enabled" : "disabled").")
-            print("\tAuto-execute \(self.autoexecute ? "enabled" : "disabled").")
-            print("\tTrace \(self.trace ? "enabled" : "disabled").")
+            print("\tVerbose instruction parsing is \(self.verbose ? "enabled" : "disabled").")
+            print("\tAuto-dump of registers after instruction execution is \(self.autodump ? "enabled" : "disabled").")
+            print("\tAuto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+            print("\tTrace printing of instructions after execution is \(self.trace ? "enabled" : "disabled").")
+            print("\tRegisters will be printed using \(self.registers.printOption.description.lowercaseString).")
         case .Help:
             // Display the help message
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
-            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.format(PrintOption.HexWith0x.rawValue))>'")
+            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.toHexWith0x())>'")
             print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Type '\(commandBeginning)commands' to see all commands.")
         case .Commands:
             print("All interpreter commands:")
@@ -215,9 +233,13 @@ class REPL {
             print("\texecute/exec/ex/e: execute all instructions previously paused by disabling auto-execution.")
             print("\ttrace/t: print every instruction as it is executed.")
             print("\tverbose/v: toggle verbose parsing of instructions.")
-            print("\tlabel/l: print all labels as well as their locations.")
-            print("\tdump/d/registers/register/reg/r: print the values of all registers.")
+            print("\tregisterdump/regdump/registers/regs/rd: print the values of all registers.")
+            print("\tregister/reg/r [register]: print the value of a register.")
             print("\tautodump/ad: toggle auto-dump of registers after execution of every instruction.")
+            print("\tlabeldump/labels/ld: print all labels as well as their locations.")
+            print("\tlabel/l [label]: print the location of a label.")
+            print("\tinstructions/insts/instructiondump/instdump/id: print all instructions as well as their locations.")
+            print("\tinstruction/inst/i [location]: print the instruction at a location.")
             print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
             print("\toctal/oct: set register dumps to print out values in octal (base 8).")
@@ -227,6 +249,7 @@ class REPL {
             print("\tabout: display information about this software.")
             print("\tcommands/cmds/c: display this message.")
             print("\tnoop/n: do nothing.")
+            print("\tfile/f/use/usefile/openfile/open/o [file]: open a file to read instructions from.")
             print("\texit/quit/q: exit the interpreter.")
         case .About:
             // Display information about the interpreter
@@ -301,13 +324,8 @@ class REPL {
             print(instruction)
         }
         if self.autodump {
-            executeCommand(.Dump)
+            executeCommand(.RegisterDump)
         }
         self.lastExecutedInstruction = instruction
-    }
-    
-    func findDuplicateLabels(labels: [String]) -> [String] {
-        // If labelsToLocations[labels[i]] != nil, then this label is already mapped to a location, so return it
-        return labels.filter({ return labelsToLocations[$0] != nil })
     }
 }

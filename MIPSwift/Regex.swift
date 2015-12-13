@@ -15,7 +15,7 @@ class Regex {
     init(_ pattern : String){
         self.pattern = pattern
         do {
-            try self.expression = NSRegularExpression(pattern: pattern, options: [.CaseInsensitive])
+            try self.expression = NSRegularExpression(pattern: pattern, options: [])
         } catch {
             // Do nothing
             self.expression = NSRegularExpression()

@@ -16,13 +16,17 @@ enum Command {
     case Execute
     case Trace
     case Verbose
-    case Label
-    case Dump
+    case RegisterDump
+    case Register(String)
     case AutoDump
     case Hex
     case Decimal
     case Octal
     case Binary
+    case LabelDump
+    case Label(String)
+    case InstructionDump
+    case Instruction(Int32)
     case Status
     case Help
     case About
@@ -32,6 +36,7 @@ enum Command {
     case Exit
     case Invalid(String)
     
+    // Construct a Command from a given string; never fails, but may be .Invalid
     init(_ string: String) {
         if string == "" {
             self = .NoOp
@@ -48,10 +53,51 @@ enum Command {
             self = .Trace
         case "verbose", "v":
             self = .Verbose
+        case "labels", "labeldump", "ld":
+            self = .LabelDump
         case "label", "l":
-            self = .Label
-        case "dump", "d", "registers", "register", "reg", "r":
-            self = .Dump
+            if commandAndArgs.count == 1 {
+                self = .Invalid("No label name supplied.")
+            } else {
+                if validLabelRegex.test(commandAndArgs[1]) {
+                    self = .Label(commandAndArgs[1])
+                } else {
+                    self = .Invalid("Invalid label: \(commandAndArgs[1])")
+                }
+            }
+        case "instructions", "insts", "instructiondump", "instdump", "id":
+            self = .InstructionDump
+        case "instruction", "inst", "i":
+            if commandAndArgs.count == 1 {
+                self = .Invalid("No location supplied.")
+            } else {
+                let scanner = NSScanner(string: commandAndArgs[1])
+                let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+                if scanner.scanHexInt(pointer) {
+                    if pointer.memory != 0 && pointer.memory < UINT32_MAX {
+                        // Safe to make an Int32 from this value
+                        self = .Instruction(Int32(pointer.memory))
+                    } else {
+                        // Unsafe to make an Int32 from this value, just complain
+                        self = .Invalid("Invalid location: \(commandAndArgs[1])")
+                    }
+                } else {
+                    self = .Invalid("Invalid location: \(commandAndArgs[1])")
+                }
+                pointer.dealloc(1)
+            }
+        case "registerdump", "regdump", "registers", "regs", "rd":
+            self = .RegisterDump
+        case "register", "reg", "r":
+            if commandAndArgs.count == 1 {
+                self = .Invalid("No register supplied.")
+            } else {
+                if validRegisters.contains(commandAndArgs[1]) {
+                    self = .Register(commandAndArgs[1])
+                } else {
+                    self = .Invalid("Invalid register reference: \(commandAndArgs[1])")
+                }
+            }
         case "autodump", "ad":
             self = .AutoDump
         case "hex", "hexadecimal":

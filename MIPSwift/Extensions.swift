@@ -74,6 +74,11 @@ extension Int32 {
             return NSString(format: f, self) as String
         }
     }
+    
+    // Just a convenience function to reduce character counts
+    func toHexWith0x() -> String {
+        return self.format(PrintOption.HexWith0x.rawValue)
+    }
 }
 
 extension Int16 {

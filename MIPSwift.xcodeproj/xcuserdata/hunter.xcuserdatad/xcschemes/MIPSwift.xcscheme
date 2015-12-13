@@ -67,7 +67,7 @@
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "-f /Users/hunter/Documents/MIPSwift/FileInput.txt"
+            argument = "-f /Users/hunter/Documents/MIPSwift/Input.txt"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument

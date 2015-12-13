@@ -11,16 +11,16 @@
 
 import Foundation
 
+// Representations of each type of MIPS instruction
 enum InstructionType {
     case rType(Operation, Register, Register, Register)
     case iType(Operation, Register, Register, Immediate)
-    case jType(Operation, String)
+    case jType(Operation, Either<Register, String>) // May jump to a label or a register
     case NonExecutable // This line only contains labels and/or comments
     case Invalid // Malformed instruction
 }
 
 class Instruction: CustomStringConvertible {
-    // Representations of each type of MIPS instruction
     let rawString: String
     let instructionString: String? // Labels and comments removed; syntax possibly reformatted
     let location: Int32
@@ -29,7 +29,7 @@ class Instruction: CustomStringConvertible {
     let type: InstructionType
     var previous: Instruction?
     var next: Instruction?
-    var description: String { get { return self.location.format(PrintOption.HexWith0x.rawValue) + " " + (self.instructionString ?? self.rawString) } }
+    var description: String { get { return self.location.toHexWith0x() + ":\t" + (self.instructionString ?? self.rawString) } }
     
     init(string: String, location: Int32, previous: Instruction?, verbose: Bool) {
         self.rawString = string
@@ -48,8 +48,8 @@ class Instruction: CustomStringConvertible {
         
         // Comment removal: if anything in arguments contains a hashtag (wow, I did just call it a hashtag instead of a pound sign),
         // then remove it and any subsequent elements from the array and continue parsing
-        let containsComment = arguments.map({ $0.containsString(commentBeginning) })
-        if let commentBeginningIndex = containsComment.indexOf(true) {
+        let argumentContainsComment = arguments.map({ $0.containsString(commentBeginning) })
+        if let commentBeginningIndex = argumentContainsComment.indexOf(true) {
             let commentBeginningString = arguments[commentBeginningIndex]
             if commentBeginningString[0] == commentBeginning {
                 // The comment is the start of this argument, just remove this argument and all that follow
@@ -77,9 +77,8 @@ class Instruction: CustomStringConvertible {
         while arguments.count > 0 && arguments[0][arguments[0].characters.count - 1] == labelEnd {
             // Loop for all labels before the actual instruction arguments
             let fullString = arguments.removeFirst()
-            let potentialLabel = fullString.substringToIndex(fullString.endIndex.predecessor()) // Remove the colon
-            let splitLabels = potentialLabel.componentsSeparatedByString(labelEnd)
-            // splitLabels may be one label or many; a single argument may actually be something like label1:label2:label3 (last colon is already removed)
+            let splitLabels = fullString.componentsSeparatedByString(labelEnd).filter({ return !$0.isEmpty })
+            // splitLabels may be one label or many; a single argument may actually be something like label1:label2:label3:
             for label in splitLabels {
                 if !validLabelRegex.test(label) {
                     // This label contains one or more invalid characters

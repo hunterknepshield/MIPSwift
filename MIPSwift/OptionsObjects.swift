@@ -18,10 +18,27 @@ struct REPLOptions {
     var usingFile = false
 }
 
-enum PrintOption: String {
+enum PrintOption: String, CustomStringConvertible {
     case Hex = "%08x"
     case HexWith0x = "%#010x"
     case Decimal = "%010d"
     case Octal = "%016o"
     case Binary = "%032b"
+    
+    var description: String {
+        get {
+            switch(self) {
+            case .Hex:
+                return "Hexadecimal"
+            case .Decimal:
+                return "Decimal"
+            case .Octal:
+                return "Octal"
+            case .Binary:
+                return "Binary"
+            case .HexWith0x:
+                return "Hexadecimal (with preceeding 0x)"
+            }
+        }
+    }
 }

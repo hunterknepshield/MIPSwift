@@ -8,6 +8,7 @@
 
 import Foundation
 
+// Representaiton of an opcode/function code
 enum OperationType {
     case ALUR
     case ALUI
@@ -18,7 +19,6 @@ enum OperationType {
 }
 
 struct Operation {
-    // Representaiton of an opcode/function code
     var name: String
     var type: OperationType
     var numRegisters: Int
@@ -26,11 +26,11 @@ struct Operation {
     var operation: ((Int32, Int32) -> Int32)?
     var bigOperation: ((Int32, Int32) -> Int64)?
     
-    // Attempt to initialize an operation from a string; may fail
+    // Attempt to initialize an operation from a string; will fail if instruction is invalid or unimplemented
     init?(_ string: String) {
         self.name = string
         switch(string) {
-            // ALU-R operations
+        // ALU-R operations
         case "add":
             self.type = .ALUR
             self.operation = (+)

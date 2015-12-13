@@ -1,3 +1,0 @@
-This is an input file.
-This is a second line.
-:help
