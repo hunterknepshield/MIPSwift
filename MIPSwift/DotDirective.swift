@@ -12,14 +12,14 @@
 import Foundation
 
 enum DotDirective: String {
-    case Text // Change to text segment
-    case Data // Change to data segment
-    case Global // Declare a global label
-    case Align // Align to a 2^n-byte boundary
-    case Space // Allocate n bytes of space
-    case Word // Store four byte values with initial values supplied
-    case Half // Store two byte values with initial values supplied
-    case Byte // Store single bytes with initial values supplied
-    case Ascii // Non-null-terminated string
-    case Asciiz // Null-terminated string    
+    case Text = ".text" // Change to text segment
+    case Data = ".data" // Change to data segment
+    case Global = ".globl" // Declare a global label
+    case Align = ".align" // Align to a 2^n-byte boundary
+    case Space = ".space" // Allocate n bytes of space
+    case Word = ".word" // Store four byte values with initial values supplied
+    case Half = ".half" // Store two byte values with initial values supplied
+    case Byte = ".byte" // Store single bytes with initial values supplied
+    case Ascii = ".ascii" // Non-null-terminated string
+    case Asciiz = ".asciiz" // Null-terminated string
 }

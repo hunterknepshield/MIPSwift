@@ -223,7 +223,7 @@ class REPL {
             print("\t\(self.verbose ? "[X]" : "[ ]") Verbose instruction parsing is \(self.verbose ? "enabled" : "disabled").")
             print("\t\(self.autodump ? "[X]" : "[ ]") Auto-dump of registers after instruction execution is \(self.autodump ? "enabled" : "disabled").")
             print("\t\(self.autoexecute ? "[X]" : "[ ]") Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
-            print("\t\(self.trace ? "[X]" : "[ ]") Trace printing of instructions after execution is \(self.trace ? "enabled" : "disabled").")
+            print("\t\(self.trace ? "[X]" : "[ ]") Trace printing of instructions during execution is \(self.trace ? "enabled" : "disabled").")
             print("\tRegisters will be printed using \(self.registers.printOption.description.lowercaseString).")
         case .Help:
             // Display the help message
@@ -289,6 +289,9 @@ class REPL {
     }
         
     func executeInstruction(instruction: Instruction) {
+        if self.trace {
+            print(instruction)
+        }
         // Update the program counter
         self.registers.set(pc.name, instruction.location + instruction.pcIncrement)
         // Determine how to execute the instruction
@@ -349,10 +352,7 @@ class REPL {
             // Should never happen; invalid instructions are dummped in the REPL and never executed
             assertionFailure("Invalid instruction: \(instruction)")
         }
-        // Debug option checking
-        if self.trace {
-            print(instruction)
-        }
+        
         if self.autodump {
             executeCommand(.RegisterDump)
         }
@@ -397,7 +397,12 @@ class REPL {
     
     func executeDirective(instruction: Instruction) {
         if case let .Directive(directive) = instruction.type {
-            
+            // Arguments, if any, are guaranteed to be valid here
+            switch(directive) {
+                
+            default:
+                print("Directive unimplemented: \(directiveBeginning + directive.rawValue.lowercaseString)")
+            }
         } else {
             assertionFailure("Attempting to execute illegal directive: \(instruction)")
         }

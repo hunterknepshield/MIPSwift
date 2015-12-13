@@ -111,6 +111,7 @@ class Instruction: CustomStringConvertible {
             }
         }
         
+        // Done removing things from arguments
         self.arguments = args
         if args.count == 0 {
             // This instruction only contained comments and/or labels
@@ -122,61 +123,149 @@ class Instruction: CustomStringConvertible {
         // Essentially, this is the decode phase
         if let operation = Operation(args[0]) {
             if operation.type == .Directive {
-                if let directive = DotDirective(rawValue: args[0].substringFromIndex(args[0].startIndex.successor()).capitalizedString) {
+                // Requires a significant amount of additional parsing to make sure arguments are in order
+                if let directive = DotDirective(rawValue: args[0]) {
                     switch(directive) {
                     case .Align:
-                        // Align current address to be on a 2^n-byte boundary
-                        break
-                    case .Data:
-                        // Change to data segment
-                        break
-                    case .Text:
-                        // Change to text segment
-                        break
+                        // Align current address to be on a 2^n-byte boundary; 1 argument, must be 0, 1, or 2
+                        self.pcIncrement = 0
+                        if args.count != 2 {
+                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                            self.type = .Invalid
+                            return
+                        } else if !["0", "1", "2"].contains(args[1]) {
+                            print("Invalid alignment factor: \(args[1])")
+                            self.type = .Invalid
+                            return
+                        }
+                    case .Data, .Text:
+                        // Change to data segment (address may be supplied; unimplemented as of now)
+                        self.pcIncrement = 0
+                        if args.count != 1 {
+                            print("Directive \(directive.rawValue) expects 0 arguments, got \(args.count - 1).")
+                            self.type = .Invalid
+                            return
+                        }
                     case .Global:
-                        // Declare a global label
-                        break
+                        // Declare a global label; 1 argument
+                        self.pcIncrement = 0
+                        if args.count != 2 {
+                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                            self.type = .Invalid
+                            return
+                        } else if !validLabelRegex.test(args[1]) {
+                            print("Invalid label: \(args[1])")
+                            self.type = .Invalid
+                            return
+                        }
                     case .Ascii:
-                        // Allocate space for a string (without null terminator)
-                        break
+                        // Allocate space for a string (without null terminator); 1 argument
+                        if args.count == 2 {
+                            self.pcIncrement = Int32(args[1].lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
+                        } else {
+                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
                     case .Asciiz:
-                        // Allocate space for a string (with null terminator)
-                        break
+                        // Allocate space for a string (with null terminator); 1 argument
+                        if args.count == 2 {
+                            self.pcIncrement = Int32(args[1].lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // Null terminator
+                        } else {
+                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
                     case .Space:
                         // Allocate n bytes
-                        break
+                        if args.count != 2 {
+                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        if let n = Int32(args[1]) where n >= 0 {
+                            self.pcIncrement = n
+                        } else {
+                            print("Invalid number of bytes to allocate: \(args[1])")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
                     case .Byte:
                         // Allocate space for n bytes with initial values
-                        break
+                        if args.count == 1 {
+                            print("Directive \(directive.rawValue) expects more than 0 arguments, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        // Ensure every argument can be transformed to an 8-bit integer
+                        var validArgs = true
+                        args.forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        if !validArgs {
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        self.pcIncrement = Int32(args.count - 1)
                     case .Half:
                         // Allocate space for n half-words with initial values
-                        break
+                        if args.count == 1 {
+                            print("Directive \(directive.rawValue) expects more than 0 arguments, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        // Ensure every argument can be transformed to a 16-bit integer
+                        var validArgs = true
+                        args.forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        if !validArgs {
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        self.pcIncrement = Int32((args.count - 1)*2)
                     case .Word:
                         // Allocate space for n words with initial values
-                        break
+                        if args.count == 1 {
+                            print("Directive \(directive.rawValue) expects more than 0 arguments, got \(args.count - 1).")
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        // Ensure every argument can be transformed to a 32-bit integer
+                        var validArgs = true
+                        args.forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        if !validArgs {
+                            self.type = .Invalid
+                            self.pcIncrement = 0
+                            return
+                        }
+                        self.pcIncrement = Int32((args.count - 1)*4)
                     }
                     self.type = .Directive(directive)
-                    self.pcIncrement = 4 // TODO actually calculate an amount
                 } else {
+                    print("Invalid directive: \(args[0])")
                     self.type = .Invalid
                     self.pcIncrement = 0
                 }
                 return
-            } else if operation.type == .Syscall {
-                self.type = .Syscall
-                self.pcIncrement = 4
+            }
+            
+            // Ensure that the operation has the proper number of arguments
+            let expectedArgCount = operation.numRegisters + operation.numImmediates
+            if args.count - 1 != expectedArgCount {
+                print("Operation \(operation.name) expects \(expectedArgCount) arguments, got \(args.count - 1).")
+                self.type = .Invalid
+                self.pcIncrement = 0
                 return
             }
             
             // Keep note of how much this instruction should increment the program counter by
             self.pcIncrement = operation.pcIncrement
-            // Ensure that the operation has the proper number of arguments
-            let argCount = operation.numRegisters + operation.numImmediates
-            if args.count - 1 != argCount {
-                print("Operation \(operation.name) expects \(argCount) arguments, got \(args.count - 1).")
-                self.type = .Invalid
-                return
-            }
             
             switch(operation.type) {
             case .ALUR: // All ALU-R operations of format op, rd, rs, rt
@@ -246,6 +335,8 @@ class Instruction: CustomStringConvertible {
                 default:
                     self.type = .Invalid
                 }
+            case .Syscall:
+                self.type = .Syscall
             default:
                 self.type = .Invalid
             }
