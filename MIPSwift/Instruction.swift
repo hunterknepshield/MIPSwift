@@ -18,6 +18,7 @@ enum InstructionType {
     case JType(Operation, Either<Register, String>) // May jump to a label or a register
     // Technically, J-type instructions store an integer value that's the offset from the current PC
     case Syscall // System call; e.g. reading input, printing, etc.
+    case Directive(DotDirective) // Dot directive; e.g. .data, .text, etc.
     case NonExecutable // This line only contains labels and/or comments
     case Invalid // Malformed instruction
 }
@@ -71,7 +72,7 @@ class Instruction: CustomStringConvertible {
                 self.comment = args[commentBeginningIndex..<args.count].joinWithSeparator(" ")
                 args.removeRange(commentBeginningIndex..<args.count)
             } else {
-                // The comment begins somewhere else in the argument, i.e. something:#like_this, or $t1, $t1, $t2#this
+                // The comment begins somewhere else in the argument, e.g. something:#like_this, or $t1, $t1, $t2#this
                 let separatedComponents = commentBeginningString.componentsSeparatedByString(commentBeginning)
                 let nonCommentPart = separatedComponents[0]
                 // nonCommentPart is guaranteed to not be the empty string
@@ -120,6 +121,53 @@ class Instruction: CustomStringConvertible {
         
         // Essentially, this is the decode phase
         if let operation = Operation(args[0]) {
+            if operation.type == .Directive {
+                if let directive = DotDirective(rawValue: args[0].substringFromIndex(args[0].startIndex.successor()).capitalizedString) {
+                    switch(directive) {
+                    case .Align:
+                        // Align current address to be on a 2^n-byte boundary
+                        break
+                    case .Data:
+                        // Change to data segment
+                        break
+                    case .Text:
+                        // Change to text segment
+                        break
+                    case .Global:
+                        // Declare a global label
+                        break
+                    case .Ascii:
+                        // Allocate space for a string (without null terminator)
+                        break
+                    case .Asciiz:
+                        // Allocate space for a string (with null terminator)
+                        break
+                    case .Space:
+                        // Allocate n bytes
+                        break
+                    case .Byte:
+                        // Allocate space for n bytes with initial values
+                        break
+                    case .Half:
+                        // Allocate space for n half-words with initial values
+                        break
+                    case .Word:
+                        // Allocate space for n words with initial values
+                        break
+                    }
+                    self.type = .Directive(directive)
+                    self.pcIncrement = 4 // TODO actually calculate an amount
+                } else {
+                    self.type = .Invalid
+                    self.pcIncrement = 0
+                }
+                return
+            } else if operation.type == .Syscall {
+                self.type = .Syscall
+                self.pcIncrement = 4
+                return
+            }
+            
             // Keep note of how much this instruction should increment the program counter by
             self.pcIncrement = operation.pcIncrement
             // Ensure that the operation has the proper number of arguments
@@ -195,8 +243,6 @@ class Instruction: CustomStringConvertible {
                     } else {
                         self.type = .Invalid
                     }
-                case "syscall":
-                    self.type = .Syscall
                 default:
                     self.type = .Invalid
                 }

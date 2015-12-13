@@ -6,7 +6,7 @@
 //  Copyright © 2015 Hunter Knepshield. All rights reserved.
 //
 
-// Syscall codes and return values:
+// All syscall codes and return values:
 // http://courses.missouristate.edu/kenvollmar/mars/help/syscallhelp.html
 
 import Foundation

@@ -335,8 +335,12 @@ class REPL {
             // This is a very complex operation that is based on various register values already set,
             // including a0, v0, etc., and may return values back in various registers
             executeSyscall()
+        case .Directive(_):
+            // This is another complex operation that may modify large amounts of data in a single line
+            // The entire instruction needs to be passed because there may be large amounts of arguments
+            executeDirective(instruction)
         case .NonExecutable:
-            // Assume all housekeeping (i.e. label assignment) has already happened
+            // Assume all housekeeping (e.g. label assignment) has already happened
             if self.trace {
                 print(instruction)
             }
@@ -388,6 +392,14 @@ class REPL {
         } else {
             // Don't assert fail for now, just output
             print("Invalid syscall code: \(self.registers.get("$v0"))")
+        }
+    }
+    
+    func executeDirective(instruction: Instruction) {
+        if case let .Directive(directive) = instruction.type {
+            
+        } else {
+            assertionFailure("Attempting to execute illegal directive: \(instruction)")
         }
     }
 }

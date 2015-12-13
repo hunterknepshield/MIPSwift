@@ -18,6 +18,7 @@
 		5AA61BC11C19529B007F1409 /* RegisterFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA61BC01C19529B007F1409 /* RegisterFile.swift */; };
 		5AAE644F1C1B651C00340245 /* Regex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AAE644E1C1B651C00340245 /* Regex.swift */; };
 		5AD2A2E51C1D4DF5002C3EDD /* SyscallCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD2A2E41C1D4DF5002C3EDD /* SyscallCode.swift */; };
+		5AD2A2E71C1D6EDE002C3EDD /* DotDirective.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD2A2E61C1D6EDE002C3EDD /* DotDirective.swift */; };
 		5AE8A8A61C1A2022002F07DC /* Register.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8A51C1A2022002F07DC /* Register.swift */; };
 		5AE8A8A81C1A2036002F07DC /* Immediate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8A71C1A2036002F07DC /* Immediate.swift */; };
 		5AE8A8AC1C1A2060002F07DC /* Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8AB1C1A2060002F07DC /* Operation.swift */; };
@@ -51,6 +52,7 @@
 		5AA9EF241C1C0E4500D24058 /* LICENSE.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		5AAE644E1C1B651C00340245 /* Regex.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Regex.swift; sourceTree = "<group>"; };
 		5AD2A2E41C1D4DF5002C3EDD /* SyscallCode.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SyscallCode.swift; sourceTree = "<group>"; };
+		5AD2A2E61C1D6EDE002C3EDD /* DotDirective.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DotDirective.swift; sourceTree = "<group>"; };
 		5AE8A8A51C1A2022002F07DC /* Register.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Register.swift; sourceTree = "<group>"; };
 		5AE8A8A71C1A2036002F07DC /* Immediate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Immediate.swift; sourceTree = "<group>"; };
 		5AE8A8AB1C1A2060002F07DC /* Operation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Operation.swift; sourceTree = "<group>"; };
@@ -92,6 +94,7 @@
 				5AA61BB51C195244007F1409 /* main.swift */,
 				5A0F630E1C19544C00DC4372 /* Command.swift */,
 				5A7D46331C196CD200615B1D /* Constants.swift */,
+				5AD2A2E61C1D6EDE002C3EDD /* DotDirective.swift */,
 				5A5AE3921C1D163C005C01DB /* Either.swift */,
 				5A0F63121C1955EF00DC4372 /* Extensions.swift */,
 				5AE8A8A71C1A2036002F07DC /* Immediate.swift */,
@@ -178,6 +181,7 @@
 				5A0F630F1C19544C00DC4372 /* Command.swift in Sources */,
 				5A58C3D71C1A2D8200B6520C /* OptionsObjects.swift in Sources */,
 				5AAE644F1C1B651C00340245 /* Regex.swift in Sources */,
+				5AD2A2E71C1D6EDE002C3EDD /* DotDirective.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

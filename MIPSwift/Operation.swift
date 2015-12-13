@@ -16,6 +16,8 @@ enum OperationType {
     case Jump
     case Branch
     case ComplexInstruction
+    case Directive
+    case Syscall
 }
 
 struct Operation {
@@ -25,11 +27,19 @@ struct Operation {
     let numImmediates: Int
     var operation: ((Int32, Int32) -> Int32)?
     var bigOperation: ((Int32, Int32) -> Int64)?
-    var pcIncrement: Int32 = 4 // All simple instructions increment pc by 4
+    var pcIncrement: Int32 = 4 // All simple instructions increment pc by 4; some increment by more
     
     // Attempt to initialize an operation from a string; will fail if instruction is invalid or unimplemented
     init?(_ string: String) {
         self.name = string
+        if string[0] == directiveBeginning {
+            // This is a dot directive; don't parse any further
+            self.numImmediates = 0
+            self.numRegisters = 0
+            self.type = .Directive
+            return
+        }
+        
         switch(string) {
         // ALU-R operations
         case "add":
@@ -39,7 +49,7 @@ struct Operation {
             self.numImmediates = 0
         case "addu":
             self.type = .ALUR
-            self.operation = { return Int32(UInt32($0) + UInt32($1)) }
+            self.operation = { return Int32((UInt32($0) + UInt32($1)).value) }
             self.numRegisters = 3
             self.numImmediates = 0
         case "sub":
@@ -49,7 +59,7 @@ struct Operation {
             self.numImmediates = 0
         case "subu":
             self.type = .ALUR
-            self.operation = { return Int32(UInt32($0) - UInt32($1)) }
+            self.operation = { return Int32((UInt32($0) - UInt32($1)).value) }
             self.numRegisters = 3
             self.numImmediates = 0
         case "and":
@@ -90,7 +100,7 @@ struct Operation {
             self.numImmediates = 1
         case "addiu":
             self.type = .ALUI
-            self.operation = { return Int32(UInt32($0) + UInt32($1)) }
+            self.operation = { return Int32((UInt32($0) + UInt32($1)).value) }
             self.numRegisters = 2
             self.numImmediates = 1
         case "andi":
@@ -130,7 +140,7 @@ struct Operation {
             self.type = .Jump
             self.numRegisters = 0
             self.numImmediates = 1
-            let op: ((Int32, Int32) -> Int32) = { return $0.0 }
+            let op: (Int32, Int32) -> Int32 = { return $0.0 }
             // Not entirely sure why this is needed, but the compiler won't accept this simpler solution...
             // self.operation = { return $0 }
             self.operation = op // $ra = unchanged
@@ -144,7 +154,7 @@ struct Operation {
             self.type = .Jump
             self.numRegisters = 1
             self.numImmediates = 0
-            let op: ((Int32, Int32) -> Int32) = { return $0.0 }
+            let op: (Int32, Int32) -> Int32 = { return $0.0 }
             self.operation = op // $ra = unchanged
         case "jalr":
             self.type = .Jump
@@ -152,10 +162,6 @@ struct Operation {
             self.numImmediates = 0
             self.operation = { return $1 } // $ra = pc
         // More complex instructions, mostly pseudo-instructions
-        case "syscall":
-            self.type = .ComplexInstruction
-            self.numRegisters = 0
-            self.numImmediates = 0
         case "li":
             self.type = .ComplexInstruction
             self.operation = (+)
@@ -179,7 +185,7 @@ struct Operation {
             self.numImmediates = 0
         case "multu":
             self.type = .ComplexInstruction
-            self.bigOperation = { return Int64(UInt64($0)*UInt64($1)) }
+            self.bigOperation = { return Int64((UInt64($0)*UInt64($1)).value) }
             self.numRegisters = 2
             self.numImmediates = 0
         case "div":
@@ -201,6 +207,11 @@ struct Operation {
                 return Int64(remainder) << 32 | Int64(quotient)
             }
             self.numRegisters = 2
+            self.numImmediates = 0
+        // Special case syscall instruction
+        case "syscall":
+            self.type = .Syscall
+            self.numRegisters = 0
             self.numImmediates = 0
         // Catch-all case for REPL to determine that this is an invalid instruction
         default:
