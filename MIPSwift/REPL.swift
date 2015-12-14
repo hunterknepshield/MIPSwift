@@ -396,12 +396,55 @@ class REPL {
     }
     
     func executeDirective(instruction: Instruction) {
-        if case let .Directive(directive) = instruction.type {
+        if case let .Directive(directive, args) = instruction.type {
             // Arguments, if any, are guaranteed to be valid here
             switch(directive) {
-                
-            default:
-                print("Directive unimplemented: \(directiveBeginning + directive.rawValue.lowercaseString)")
+            case .Text:
+                print("TODO: change to text segment")
+            case .Data:
+                print("TODO: change to data segment")
+            case .Global:
+                let label = args[0]
+                // If label is already defined, don't need to do anything
+                // If it isn't already defined, TODO implement
+                if labelsToLocations[label] == nil {
+                    print("Undefined label: \(label) TODO implement")
+                }
+            case .Align:
+                // Align current counter to a 2^n-byte boundary
+                let n = Int(args[0])!
+                switch(n) {
+                case 0:
+                    break
+                case 1:
+                    break
+                case 2:
+                    break
+                default:
+                    assertionFailure("Invalid alignment: \(n)")
+                }
+            case .Space:
+                // Allocate n bytes
+                let n = Int(args[0])!
+                print("TODO: allocate \(n) bytes")
+            case .Word:
+                let initialValues = args.map({ return Int32($0)! })
+                // TODO implement
+                print("Allocate space with values: \(initialValues)")
+            case .Half:
+                let initialValues = args.map({ return Int16($0)! })
+                // TODO implement
+                print("Allocate space with values: \(initialValues)")
+            case .Byte:
+                let initialValues = args.map({ return Int8($0)! })
+                // TODO implement
+                print("Allocate space with values: \(initialValues)")
+            case .Ascii:
+                let string = args[0]
+                print("Allocate string: \(string)")
+            case .Asciiz:
+                let string = args[0] + "\0"
+                print("Allocate string: \(string)")
             }
         } else {
             assertionFailure("Attempting to execute illegal directive: \(instruction)")

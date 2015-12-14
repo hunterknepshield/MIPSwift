@@ -18,7 +18,7 @@ enum InstructionType {
     case JType(Operation, Either<Register, String>) // May jump to a label or a register
     // Technically, J-type instructions store an integer value that's the offset from the current PC
     case Syscall // System call; e.g. reading input, printing, etc.
-    case Directive(DotDirective) // Dot directive; e.g. .data, .text, etc.
+    case Directive(DotDirective, [String]) // Dot directive with arugments; e.g. .data, .text, etc.
     case NonExecutable // This line only contains labels and/or comments
     case Invalid // Malformed instruction
 }
@@ -26,20 +26,26 @@ enum InstructionType {
 class Instruction: CustomStringConvertible {
     let rawString: String
     var instructionString: String {
+        // Labels and comments removed; syntax possibly reformatted
         get {
             if self.arguments.count > 0 {
                 var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
                 var counter = 0
-                self.arguments[1..<self.arguments.count].forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
+                if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
+                    // Add string literal delimiters before and after arguments; only for .ascii/.asciiz
+                    string += stringLiteralDelimiter + self.arguments[1].toStringWithLiteralEscapes() + stringLiteralDelimiter
+                } else {
+                    self.arguments[1..<self.arguments.count].forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
+                }
                 return string
             } else {
                 return self.rawString
             }
         }
-    }// Labels and comments removed; syntax possibly reformatted
+    }
     let location: Int32
     let pcIncrement: Int32
-    let arguments: [String]
+    var arguments = [String]()
     var labels = [String]()
     let comment: String?
     let type: InstructionType
@@ -100,7 +106,6 @@ class Instruction: CustomStringConvertible {
                     // This label contains one or more invalid characters
                     print("Invalid label: \(label)")
                     self.type = .Invalid
-                    self.arguments = []
                     self.pcIncrement = 0
                     return
                 }
@@ -111,7 +116,7 @@ class Instruction: CustomStringConvertible {
             }
         }
         
-        // Done removing things from arguments
+        // Done removing things from arguments, but directives may modify further
         self.arguments = args
         if args.count == 0 {
             // This instruction only contained comments and/or labels
@@ -159,24 +164,90 @@ class Instruction: CustomStringConvertible {
                             return
                         }
                     case .Ascii:
-                        // Allocate space for a string (without null terminator); 1 argument
-                        if args.count == 2 {
-                            self.pcIncrement = Int32(args[1].lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
-                        } else {
-                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                        // Allocate space for a string (without null terminator); 1 argument, though it may have been split by paring above
+                        if args.count == 1 {
+                            print("Directive \(directive.rawValue) expects 1 argument, got 0.")
                             self.type = .Invalid
                             self.pcIncrement = 0
                             return
+                        } else {
+                            // Need to ensure that the whitespace from the original instruction's argument isn't lost
+                            if let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) {
+                                if let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex {
+                                    let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
+                                    let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
+                                    if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
+                                        // There is trailing stuff after the string literal is closed, don't allow this
+                                        print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
+                                        self.type = .Invalid
+                                        self.pcIncrement = 0
+                                        return
+                                    }
+                                    do {
+                                        let escapedArgument = try rawArgument.toStringWithEscapeSequences()
+                                        self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
+                                        self.arguments = [args[0], escapedArgument]
+                                    } catch _ {
+                                        // Unable to convert escape sequences
+                                        self.type = .Invalid
+                                        self.pcIncrement = 0
+                                        return
+                                    }
+                                } else {
+                                    print("String literal expects closing delimiter.")
+                                    self.type = .Invalid
+                                    self.pcIncrement = 0
+                                    return
+                                }
+                            } else {
+                                print("Directive \(directive.rawValue) expects string literal.")
+                                self.type = .Invalid
+                                self.pcIncrement = 0
+                                return
+                            }
                         }
                     case .Asciiz:
                         // Allocate space for a string (with null terminator); 1 argument
-                        if args.count == 2 {
-                            self.pcIncrement = Int32(args[1].lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // Null terminator
-                        } else {
-                            print("Directive \(directive.rawValue) expects 1 argument, got \(args.count - 1).")
+                        if args.count == 1 {
+                            print("Directive \(directive.rawValue) expects 1 argument, got 0.")
                             self.type = .Invalid
                             self.pcIncrement = 0
                             return
+                        } else {
+                            // Need to ensure that the whitespace from the original instruction's argument isn't lost
+                            if let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) {
+                                if let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex {
+                                    let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
+                                    let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
+                                    if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
+                                        // There is trailing stuff after the string literal is closed, don't allow this
+                                        print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
+                                        self.type = .Invalid
+                                        self.pcIncrement = 0
+                                        return
+                                    }
+                                    do {
+                                        let escapedArgument = try rawArgument.toStringWithEscapeSequences()
+                                        self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // No null terminator
+                                        self.arguments = [args[0], escapedArgument]
+                                    } catch _ {
+                                        // Unable to convert escape sequences
+                                        self.type = .Invalid
+                                        self.pcIncrement = 0
+                                        return
+                                    }
+                                } else {
+                                    print("String literal expects closing delimiter.")
+                                    self.type = .Invalid
+                                    self.pcIncrement = 0
+                                    return
+                                }
+                            } else {
+                                print("Directive \(directive.rawValue) expects string literal.")
+                                self.type = .Invalid
+                                self.pcIncrement = 0
+                                return
+                            }
                         }
                     case .Space:
                         // Allocate n bytes
@@ -204,7 +275,7 @@ class Instruction: CustomStringConvertible {
                         }
                         // Ensure every argument can be transformed to an 8-bit integer
                         var validArgs = true
-                        args.forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
                         if !validArgs {
                             self.type = .Invalid
                             self.pcIncrement = 0
@@ -221,7 +292,7 @@ class Instruction: CustomStringConvertible {
                         }
                         // Ensure every argument can be transformed to a 16-bit integer
                         var validArgs = true
-                        args.forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        args[1..<args.count].forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
                         if !validArgs {
                             self.type = .Invalid
                             self.pcIncrement = 0
@@ -238,7 +309,7 @@ class Instruction: CustomStringConvertible {
                         }
                         // Ensure every argument can be transformed to a 32-bit integer
                         var validArgs = true
-                        args.forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                        args[1..<args.count].forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
                         if !validArgs {
                             self.type = .Invalid
                             self.pcIncrement = 0
@@ -246,7 +317,7 @@ class Instruction: CustomStringConvertible {
                         }
                         self.pcIncrement = Int32((args.count - 1)*4)
                     }
-                    self.type = .Directive(directive)
+                    self.type = .Directive(directive, Array(self.arguments[1..<self.arguments.count]))
                 } else {
                     print("Invalid directive: \(args[0])")
                     self.type = .Invalid
@@ -254,6 +325,7 @@ class Instruction: CustomStringConvertible {
                 }
                 return
             }
+            // All .Directive types have returned now
             
             // Ensure that the operation has the proper number of arguments
             let expectedArgCount = operation.numRegisters + operation.numImmediates
@@ -337,7 +409,7 @@ class Instruction: CustomStringConvertible {
                 }
             case .Syscall:
                 self.type = .Syscall
-            default:
+            default: // .Directive never gets this far
                 self.type = .Invalid
             }
         } else {

@@ -30,6 +30,7 @@ let lo = Register("lo", writing: true, user: false)!
 // Strings to help with string parsing
 let commandBeginning = ":"
 let directiveBeginning = "."
+let stringLiteralDelimiter = "\""
 let labelEnd = ":"
 let commentBeginning = "#"
 let validInstructionSeparators = "(), \t"
