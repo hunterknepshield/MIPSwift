@@ -8,8 +8,8 @@
 
 import Foundation
 
+// Representation of a source/destination register
 struct Register {
-    // Representation of a source/destination register
     var name: String
     
     // Attempt to initialize a register from a given name,

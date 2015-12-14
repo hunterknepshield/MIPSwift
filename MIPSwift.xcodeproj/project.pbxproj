@@ -21,7 +21,6 @@
 		5AD2A2E71C1D6EDE002C3EDD /* DotDirective.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD2A2E61C1D6EDE002C3EDD /* DotDirective.swift */; };
 		5AE8A8A61C1A2022002F07DC /* Register.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8A51C1A2022002F07DC /* Register.swift */; };
 		5AE8A8A81C1A2036002F07DC /* Immediate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8A71C1A2036002F07DC /* Immediate.swift */; };
-		5AE8A8AC1C1A2060002F07DC /* Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE8A8AB1C1A2060002F07DC /* Operation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -55,7 +54,6 @@
 		5AD2A2E61C1D6EDE002C3EDD /* DotDirective.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DotDirective.swift; sourceTree = "<group>"; };
 		5AE8A8A51C1A2022002F07DC /* Register.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Register.swift; sourceTree = "<group>"; };
 		5AE8A8A71C1A2036002F07DC /* Immediate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Immediate.swift; sourceTree = "<group>"; };
-		5AE8A8AB1C1A2060002F07DC /* Operation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Operation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,7 +97,6 @@
 				5A0F63121C1955EF00DC4372 /* Extensions.swift */,
 				5AE8A8A71C1A2036002F07DC /* Immediate.swift */,
 				5A0F630C1C19530200DC4372 /* Instruction.swift */,
-				5AE8A8AB1C1A2060002F07DC /* Operation.swift */,
 				5A58C3D61C1A2D8200B6520C /* OptionsObjects.swift */,
 				5AAE644E1C1B651C00340245 /* Regex.swift */,
 				5AE8A8A51C1A2022002F07DC /* Register.swift */,
@@ -167,7 +164,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5AE8A8AC1C1A2060002F07DC /* Operation.swift in Sources */,
 				5A0F630D1C19530200DC4372 /* Instruction.swift in Sources */,
 				5AD2A2E51C1D4DF5002C3EDD /* SyscallCode.swift in Sources */,
 				5AA61BC11C19529B007F1409 /* RegisterFile.swift in Sources */,

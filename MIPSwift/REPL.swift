@@ -16,8 +16,6 @@ class REPL {
     var pausedPc: Int32? // Keep track of where execution was last paused
     var labelsToLocations = [String : Int32]() // Maps labels to locations
     var locationsToInstructions = [Int32 : Instruction]() // Maps locations to instructions
-    var firstInstruction: Instruction?
-    var lastExecutedInstruction: Instruction?
     var verbose = false
     var autodump = false
     var autoexecute = true
@@ -41,7 +39,6 @@ class REPL {
         } else {
             print("Ready to read input. Type '\(commandBeginning)help' for more.")
         }
-        var previousInstruction: Instruction?
         while true {
             if !self.usingFile {
                 // Print the prompt if reading from stdIn
@@ -52,17 +49,11 @@ class REPL {
                 if inputString.rangeOfString(commandBeginning)?.minElement() == inputString.startIndex || inputString == "" {
                     // This is a command, not an instruction; parse it as such
                     executeCommand(Command(inputString))
-                } else {
-                    // This is an instruction, not a command; parse it as such
-                    let instruction = Instruction(string: inputString, location: currentPc, previous: previousInstruction, verbose: verbose)
-                    switch(instruction.type) {
-                    case .Invalid:
-                        // This wasn't a valid instruction; don't store/execute anything
-                        print("Invalid instruction: \(instruction)")
-                        return
+                } else if var inst = Instruction(string: inputString, location: currentPc, verbose: verbose) {
+                    switch(inst.type) {
                     case .NonExecutable:
-                        // This line contained only labels and/or comments; don't execute anything
-                        let dupes = instruction.labels.filter({ return labelsToLocations[$0] != nil })
+                        // This line contained only labels and/or comments; don't execute anything, but make sure labels are all valid
+                        let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
                         if dupes.count > 0 {
                             // There was at least one duplicate label; don't store/execute anything
                             print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
@@ -70,9 +61,10 @@ class REPL {
                             dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
                             return
                         }
+                        inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
                     default:
                         // Increment the program counter, store its new value in the register file, and then execute
-                        let dupes = instruction.labels.filter({ return labelsToLocations[$0] != nil })
+                        let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
                         if dupes.count > 0 {
                             // There was at least one duplicate label; don't store/execute anything
                             print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
@@ -80,23 +72,34 @@ class REPL {
                             dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
                             return
                         }
-                        locationsToInstructions[self.currentPc] = instruction
+                        inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
+                        // Check if this location already contains an instruction
+                        if let existingInstruction = locationsToInstructions[inst.location] {
+                            switch(existingInstruction.type) {
+                            case .NonExecutable:
+                                // This is fine; only labels or comments here, just overwrite
+                                inst.labels = existingInstruction.labels + inst.labels
+                                inst.comment = "\(existingInstruction.comment ?? "") \(inst.comment ?? "")"
+                                locationsToInstructions[inst.location] = inst
+                            default:
+                                // This is bad; overwriting an executable instruction
+                                // This is likely caused by an issue with internal REPL state
+                                print("Cannot overwrite existing instruction: \(existingInstruction)")
+                            }
+                        }
                         
-                        // Increment the program counter by 4
+                        // Increment the program counter by however much the instruction requires
                         // Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
-                        let newPc = self.currentPc + instruction.pcIncrement
+                        locationsToInstructions[self.currentPc] = inst
+                        let newPc = self.currentPc + inst.pcIncrement
                         self.currentPc = newPc
                         
                         if self.autoexecute {
-                            executeInstruction(instruction)
+                            executeInstruction(inst)
                         }
                     }
-                    // Store this instruction and map any labels
-                    if self.firstInstruction == nil {
-                        self.firstInstruction = instruction
-                    }
-                    previousInstruction = instruction
-                    instruction.labels.forEach({ labelsToLocations[$0] = instruction.location }) // Store labels in the dictionary
+                } else {
+                    print("Invalid instruction: \(inputString)")
                 }
             })
         }
@@ -127,13 +130,13 @@ class REPL {
     
     func resumeExecution() {
         print("Resuming execution...")
-        // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstruction
-        // Alternatively, if lastExecutedInstruction is nil, nothing was ever executed, so start from the beginning
+        // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstructionLocation
+        // Alternatively, if lastExecutedInstructionLocation's lookup is nil, nothing was ever executed, so start from the beginning
         var currentInstruction = locationsToInstructions[pausedPc ?? beginningPc]
         while currentInstruction != nil {
-            // Execute the current instruction, then execute currentInstruction.next, etc. until nil is found
+            // Execute the current instruction, then execute the next instruction, etc. until nil is found
             executeInstruction(currentInstruction!)
-            currentInstruction = currentInstruction!.next
+            currentInstruction = locationsToInstructions[currentPc]
         }
         print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
         if self.autoexecute {
@@ -293,70 +296,156 @@ class REPL {
             print(instruction)
         }
         // Update the program counter
-        self.registers.set(pc.name, instruction.location + instruction.pcIncrement)
-        // Determine how to execute the instruction
+        let newPc = instruction.location + instruction.pcIncrement
+        self.currentPc = newPc
+        self.registers.set(pc.name, newPc)
+        
         switch(instruction.type) {
-        case .RType(let op, let rd, let rs, let rt):
-            let rsValue = registers.get(rs.name)
-            let rtValue = registers.get(rt.name)
-            if op.type == .ALUR || op.operation != nil {
-                let result = op.operation!(rsValue, rtValue)
-                self.registers.set(rd.name, result)
-            } else if op.type == .ComplexInstruction && op.bigOperation != nil {
-                // This is a mult/div instruction, need to modify hi/lo
-                let result = op.bigOperation!(rsValue, rtValue)
-                let hiValue = Int32(result >> 32) // Upper 32 bits
-                let loValue = Int32(result & 0xFFFFFFFF) // Lower 32 bits
+        case let .ALUR(op, dest, src1, src2):
+            let src1Value = self.registers.get(src1.name)
+            let src2Value = self.registers.get(src2.name)
+            switch(op) {
+            case .Left(let op32):
+                let result = op32(src1Value, src2Value)
+                self.registers.set(dest!.name, result)
+            case .Right(let (op64, storeHi)):
+                // This is a div/mult instruction or a div/rem/mul pseudoinstruction
+                let (hiValue, loValue) = op64(src1Value, src2Value)
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
-            }
-        case .IType(let op, let rt, let rs, let imm):
-            let rsValue = registers.get(rs.name)
-            let result = op.operation!(rsValue, imm.signExtended)
-            self.registers.set(rt.name, result)
-        case .JType(let op, let destination):
-            // Jump to the destination
-            let destinationLocation: Int32
-            switch(destination) {
-            case .Left(let reg):
-                destinationLocation = self.registers.get(reg.name)
-            case .Right(let label):
-                if let loc = labelsToLocations[label] {
-                    destinationLocation = loc
-                } else {
-                    assertionFailure("Undefined label: \(label)")
-                    destinationLocation = INT32_MAX
+                if dest != nil {
+                    // This was one of the pseudoinstructions, so there is a destination
+                    // Hi and lo are always modified to mimic the real pseudoinstruction's execution
+                    // Essentially, this amounts to an additional mfhi/mflo after the div/mul executes
+                    if storeHi {
+                        self.registers.set(dest!.name, hiValue)
+                    } else {
+                        self.registers.set(dest!.name, loValue)
+                    }
                 }
             }
-            // op.operation is used to compute the (possibly) new return address
-            let newRa = op.operation!(self.registers.get(ra.name), self.registers.get(pc.name))
-            self.registers.set(ra.name, newRa)
-            self.registers.set(pc.name, destinationLocation)
-            self.currentPc = destinationLocation
-            // TODO resume execution at currentPc
-        case .Syscall:
-            // This is a very complex operation that is based on various register values already set,
-            // including a0, v0, etc., and may return values back in various registers
-            executeSyscall()
-        case .Directive(_):
-            // This is another complex operation that may modify large amounts of data in a single line
-            // The entire instruction needs to be passed because there may be large amounts of arguments
-            executeDirective(instruction)
-        case .NonExecutable:
-            // Assume all housekeeping (e.g. label assignment) has already happened
-            if self.trace {
-                print(instruction)
+        case let .ALUI(op, dest, src1, src2):
+            let src1Value = self.registers.get(src1.name)
+            switch(op) {
+            case .Left(let op32):
+                let result = op32(src1Value, src2.signExtended)
+                self.registers.set(dest.name, result)
+            case .Right(let (op64, storeHi)):
+                // This was a div/rem/mul pseudoinstruction
+                let (hiValue, loValue) = op64(src1Value, src2.signExtended)
+                self.registers.set(hi.name, hiValue)
+                self.registers.set(lo.name, loValue)
+                if storeHi {
+                    self.registers.set(dest.name, hiValue)
+                } else {
+                    self.registers.set(dest.name, loValue)
+                }
             }
-            return
-        case .Invalid:
-            // Should never happen; invalid instructions are dummped in the REPL and never executed
-            assertionFailure("Invalid instruction: \(instruction)")
+        case let .Memory(storing, size, memReg, addrReg, offset):
+            let addrRegValue = self.registers.get(addrReg.name)
+            let address = addrRegValue + offset.signExtended
+            if storing {
+                // Storing the value in memReg to memory
+                let valueToStore32 = self.registers.get(memReg.name)
+                switch(size) {
+                case 0:
+                    // Storing a single byte (from low-order bits)
+                    let valueToStore8 = Int8(valueToStore32 & 0xFF)
+                    print("TODO store \(valueToStore8)")
+                case 1:
+                    // Storing a half-word (from low-order bits)
+                    if address % 2 != 0 {
+                        print("Unaligned memory reference: \(address.toHexWith0x())")
+                    }
+                    let valueToStore16 = Int16(valueToStore32 & 0xFFFF)
+                    print("TODO store \(valueToStore16)")
+                case 2:
+                    // Storing a word
+                    if address % 4 != 0 {
+                        print("Unaligned memory reference: \(address.toHexWith0x())")
+                    }
+                    print("TODO store \(valueToStore32)")
+                default:
+                    // Never reached
+                    assertionFailure("Invalid size of store word: \(size)")
+                }
+            } else {
+                // Loading a value from memory into memReg
+                let loadedValue: Int32
+                switch(size) {
+                case 0:
+                    // Loading a single byte
+                    print("TODO load")
+                    loadedValue = Int32(0)
+                    break
+                case 1:
+                    // Loading a half-word
+                    if address % 2 != 0 {
+                        print("Unaligned memory reference: \(address.toHexWith0x())")
+                    }
+                    print("TODO load")
+                    loadedValue = Int32(0)
+                    break
+                case 2:
+                    // Loading a word
+                    if address % 4 != 0 {
+                        print("Unaligned memory reference: \(address.toHexWith0x())")
+                    }
+                    print("TODO load")
+                    loadedValue = Int32(0)
+                    break
+                default:
+                    // Never reached
+                    assertionFailure("Invalid size of load word: \(size)")
+                    loadedValue = INT32_MAX
+                }
+                self.registers.set(memReg.name, loadedValue)
+            }
+        case let .Jump(link, dest):
+            let destinationAddress: Int32
+            switch(dest) {
+            case .Left(let reg):
+                destinationAddress = self.registers.get(reg.name)
+            case .Right(let label):
+                if let loc = labelsToLocations[label] {
+                    destinationAddress = loc
+                } else {
+                    assertionFailure("Undefined label: \(label)")
+                    destinationAddress = INT32_MAX
+                }
+            }
+            if link {
+                self.registers.set(ra.name, self.currentPc)
+            }
+            self.registers.set(pc.name, destinationAddress)
+            self.currentPc = destinationAddress
+        case let .Branch(op, src1, src2, dest):
+            let reg1Value = self.registers.get(src1.name)
+            let reg2Value = self.registers.get(src2.name)
+            if op(reg1Value, reg2Value) {
+                // Take this branch
+                if let loc = labelsToLocations[dest] {
+                    self.registers.set(pc.name, loc)
+                    self.currentPc = loc
+                } else {
+                    assertionFailure("Undefined label: \(dest)")
+                }
+            }
+        case .Directive(_, _):
+            // Abstract this away; large amount of parsing required
+            // Arguments are guaranteed to be valid, otherwise instruction generation would have failed
+            executeDirective(instruction)
+        case .Syscall:
+            // Abstract this away; large amount of parsing required
+            executeSyscall()
+        case .NonExecutable:
+            // Assume all housekeeping like label storage has already occurred; nothing to do here
+            break
         }
-        
+                
         if self.autodump {
             executeCommand(.RegisterDump)
         }
-        self.lastExecutedInstruction = instruction
     }
     
     func executeSyscall() {

@@ -65,6 +65,5 @@ if printUsage {
     print("\tnoae: start auto-execute off.")
     print("\tf file: open file instead of reading instructions from standard input.")
 } else {
-    let repl = REPL(options: useDeveloperOptions ? developerOptions : defaultOptions)
-    repl.run()
+    REPL(options: useDeveloperOptions ? developerOptions : defaultOptions).run()
 }

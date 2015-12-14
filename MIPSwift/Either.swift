@@ -8,6 +8,7 @@
 
 import Foundation
 
+// A simple wrapper to allow efficient passing of a parameter that may have two different types
 enum Either<L, R> {
     case Left(L)
     case Right(R)

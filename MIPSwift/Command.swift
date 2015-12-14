@@ -8,10 +8,8 @@
 
 import Foundation
 
+// Representation of an interpreter command
 enum Command {
-    // Representation of a user-entered command, like :dump or :exit
-    // These are not instructions and do not affect the register file,
-    // and are only executed for effect
     case AutoExecute
     case Execute
     case Trace
@@ -43,8 +41,10 @@ enum Command {
             return
         }
         let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
-        let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet()) // In case there are arguments to this command
-        switch(commandAndArgs[0]) {
+        let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+        let command = commandAndArgs[0]
+        let args = commandAndArgs[1..<commandAndArgs.count]
+        switch(command) {
         case "autoexecute", "ae":
             self = .AutoExecute
         case "execute", "exec", "ex", "e":
@@ -59,10 +59,10 @@ enum Command {
             if commandAndArgs.count == 1 {
                 self = .Invalid("No label name supplied.")
             } else {
-                if validLabelRegex.test(commandAndArgs[1]) {
-                    self = .Label(commandAndArgs[1])
+                if validLabelRegex.test(args[0]) {
+                    self = .Label(args[0])
                 } else {
-                    self = .Invalid("Invalid label: \(commandAndArgs[1])")
+                    self = .Invalid("Invalid label: \(args[0])")
                 }
             }
         case "instructions", "insts", "instructiondump", "instdump", "id":
@@ -71,7 +71,7 @@ enum Command {
             if commandAndArgs.count == 1 {
                 self = .Invalid("No location supplied.")
             } else {
-                let scanner = NSScanner(string: commandAndArgs[1])
+                let scanner = NSScanner(string: args[0])
                 let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
                 if scanner.scanHexInt(pointer) {
                     if pointer.memory != 0 && pointer.memory < UINT32_MAX {
@@ -79,10 +79,10 @@ enum Command {
                         self = .Instruction(Int32(pointer.memory))
                     } else {
                         // Unsafe to make an Int32 from this value, just complain
-                        self = .Invalid("Invalid location: \(commandAndArgs[1])")
+                        self = .Invalid("Invalid location: \(args[0])")
                     }
                 } else {
-                    self = .Invalid("Invalid location: \(commandAndArgs[1])")
+                    self = .Invalid("Invalid location: \(args[0])")
                 }
                 pointer.dealloc(1)
             }
@@ -92,10 +92,10 @@ enum Command {
             if commandAndArgs.count == 1 {
                 self = .Invalid("No register supplied.")
             } else {
-                if validRegisters.contains(commandAndArgs[1]) {
-                    self = .Register(commandAndArgs[1])
+                if validRegisters.contains(args[0]) {
+                    self = .Register(args[0])
                 } else {
-                    self = .Invalid("Invalid register reference: \(commandAndArgs[1])")
+                    self = .Invalid("Invalid register reference: \(args[0])")
                 }
             }
         case "autodump", "ad":
@@ -119,10 +119,10 @@ enum Command {
         case "noop", "n", "":
             self = .NoOp
         case "file", "use", "usefile", "open", "openfile", "o", "f":
-            if commandAndArgs.count == 1 {
+            if args.count == 0 {
                 self = .Invalid("No file name supplied.")
             } else {
-                self = .UseFile(commandAndArgs[1])
+                self = .UseFile(args[0])
             }
         case "exit", "quit", "q":
             self = .Exit
