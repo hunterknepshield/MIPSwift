@@ -40,7 +40,7 @@ enum Command {
             self = .NoOp
             return
         }
-        let strippedString = string[1..<string.characters.count] // Remove the commandBeginning character
+        let strippedString = string[1..<string.characters.count] // Remove the commandDelimiter character
         let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
         let command = commandAndArgs[0]
         let args = commandAndArgs[1..<commandAndArgs.count]

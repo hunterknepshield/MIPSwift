@@ -37,7 +37,7 @@ class REPL {
         if self.usingFile {
             print("Reading file.")
         } else {
-            print("Ready to read input. Type '\(commandBeginning)help' for more.")
+            print("Ready to read input. Type '\(commandDelimiter)help' for more.")
         }
         while true {
             if !self.usingFile {
@@ -46,7 +46,7 @@ class REPL {
             }
             let input = readInput() // Read input (whitespace is already trimmed from either end)
             input.forEach({ inputString in
-                if inputString.rangeOfString(commandBeginning)?.minElement() == inputString.startIndex || inputString == "" {
+                if inputString.rangeOfString(commandDelimiter)?.minElement() == inputString.startIndex || inputString == "" {
                     // This is a command, not an instruction; parse it as such
                     executeCommand(Command(inputString))
                 } else if var inst = Instruction(string: inputString, location: currentPc, verbose: verbose) {
@@ -232,7 +232,7 @@ class REPL {
             // Display the help message
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
             print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.toHexWith0x())>'")
-            print("To enter an interpreter command, type '\(commandBeginning)' followed by the command. Type '\(commandBeginning)commands' to see all commands.")
+            print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
             print("All interpreter commands:")
             print("\tautoexecute/ae: toggle auto-execution of entered instructions.")
@@ -308,7 +308,7 @@ class REPL {
             case .Left(let op32):
                 let result = op32(src1Value, src2Value)
                 self.registers.set(dest!.name, result)
-            case .Right(let (op64, storeHi)):
+            case .Right(let (op64, moveFromHi)):
                 // This is a div/mult instruction or a div/rem/mul pseudoinstruction
                 let (hiValue, loValue) = op64(src1Value, src2Value)
                 self.registers.set(hi.name, hiValue)
@@ -317,7 +317,7 @@ class REPL {
                     // This was one of the pseudoinstructions, so there is a destination
                     // Hi and lo are always modified to mimic the real pseudoinstruction's execution
                     // Essentially, this amounts to an additional mfhi/mflo after the div/mul executes
-                    if storeHi {
+                    if moveFromHi {
                         self.registers.set(dest!.name, hiValue)
                     } else {
                         self.registers.set(dest!.name, loValue)
@@ -330,18 +330,18 @@ class REPL {
             case .Left(let op32):
                 let result = op32(src1Value, src2.signExtended)
                 self.registers.set(dest.name, result)
-            case .Right(let (op64, storeHi)):
+            case .Right(let (op64, moveFromHi)):
                 // This was a div/rem/mul pseudoinstruction
                 let (hiValue, loValue) = op64(src1Value, src2.signExtended)
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
-                if storeHi {
+                if moveFromHi {
                     self.registers.set(dest.name, hiValue)
                 } else {
                     self.registers.set(dest.name, loValue)
                 }
             }
-        case let .Memory(storing, size, memReg, addrReg, offset):
+        case let .Memory(storing, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
             let address = addrRegValue + offset.signExtended
             if storing {

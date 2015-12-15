@@ -28,11 +28,12 @@ let hi = Register("hi", writing: true, user: false)!
 let lo = Register("lo", writing: true, user: false)!
 
 // Strings to help with string parsing
-let commandBeginning = ":"
-let directiveBeginning = "."
+let commandDelimiter = ":"
+let directiveDelimiter = "."
 let stringLiteralDelimiter = "\""
-let labelEnd = ":"
-let commentBeginning = "#"
+let registerDelimiter = "$"
+let labelDelimiter = ":"
+let commentDelimiter = "#"
 let validInstructionSeparators = "(), \t"
 let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: validInstructionSeparators)
 let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$") // Labels must be alphanumeric and must start with a letter

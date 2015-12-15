@@ -21,7 +21,7 @@ enum InstructionType {
     // Typical Instruction types
     case ALUR(Either<Operation32, (Operation64, Bool)>, Register?, Register, Register) // Destination register may or may not be used based on which type the operation is
     case ALUI(Either<Operation32, (Operation64, Bool)>, Register, Register, Immediate)
-    case Memory(Bool, Int, Register, Register, Immediate)
+    case Memory(Bool, Int, Register, Immediate, Register)
     case Jump(Bool, Either<Register, String>) // Technically, J-type instructions store an integer value that's the offset from the current program counter
     case Branch(OperationBool, Register, Register, String)
     // Special Instruction types
@@ -87,16 +87,16 @@ struct Instruction: CustomStringConvertible {
         
         // Comment removal: if anything in arguments contains a hashtag (wow, I did just call it a hashtag instead of a pound sign),
         // then remove it and any subsequent elements from the array and continue parsing
-        let argumentContainsComment = args.map({ $0.containsString(commentBeginning) })
+        let argumentContainsComment = args.map({ $0.containsString(commentDelimiter) })
         if let commentBeginningIndex = argumentContainsComment.indexOf(true) {
             let commentBeginningString = args[commentBeginningIndex]
-            if commentBeginningString[0] == commentBeginning {
+            if commentBeginningString[0] == commentDelimiter {
                 // The comment is the start of this argument, just remove this argument and all that follow
                 self.comment = args[commentBeginningIndex..<args.count].joinWithSeparator(" ")
                 args.removeRange(commentBeginningIndex..<args.count)
             } else {
                 // The comment begins somewhere else in the argument, e.g. something:#like_this, or $t1, $t1, $t2#this
-                let separatedComponents = commentBeginningString.componentsSeparatedByString(commentBeginning)
+                let separatedComponents = commentBeginningString.componentsSeparatedByString(commentDelimiter)
                 let nonCommentPart = separatedComponents[0]
                 // nonCommentPart is guaranteed to not be the empty string
                 args[commentBeginningIndex] = nonCommentPart // Put the non-comment part back in the arguments
@@ -113,10 +113,10 @@ struct Instruction: CustomStringConvertible {
         
         // Label identification: if anything at the beginning of arguments ends with a colon,
         // then remove it from arguments to be parsed and add it to this instruction's labels array
-        while args.count > 0 && args[0][args[0].characters.count - 1] == labelEnd {
+        while args.count > 0 && args[0][args[0].characters.count - 1] == labelDelimiter {
             // Loop for all labels before the actual instruction arguments
             let fullString = args.removeFirst()
-            let splitLabels = fullString.componentsSeparatedByString(labelEnd).filter({ return !$0.isEmpty })
+            let splitLabels = fullString.componentsSeparatedByString(labelDelimiter).filter({ return !$0.isEmpty })
             // splitLabels may be one label or many; a single argument may actually be something like label1:label2:label3:
             for label in splitLabels {
                 if !validLabelRegex.test(label) {
@@ -141,7 +141,7 @@ struct Instruction: CustomStringConvertible {
         }
         
         let argCount = args.count - 1 // Don't count the actual instruction
-        if args[0][0] == directiveBeginning {
+        if args[0][0] == directiveDelimiter {
             // Requires a significant amount of additional parsing to make sure arguments are in order
             if let directive = DotDirective(rawValue: args[0]) {
                 switch(directive) {
@@ -502,7 +502,20 @@ struct Instruction: CustomStringConvertible {
             } else {
                 return nil
             }
-        // TODO Memory operations
+        // Memory operations
+        case "lw", "lh", "lb", "sw", "sh", "sb":
+            if argCount != 3 {
+                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
+                return nil
+            }
+            let storing = args[0][0] == "s"
+            let size = args[0][1] == "b" ? 0 : args[0][1] == "h" ? 1 : 2
+            if let memReg = Register(args[1], writing: !storing), offset = Immediate(args[2]), addrReg = Register(args[3], writing: false) {
+                self.type = .Memory(storing, size, memReg, offset, addrReg)
+                self.pcIncrement = 4
+            } else {
+                return nil
+            }
         // Jump instructions
         case "j":
             if argCount != 1 {
@@ -574,38 +587,140 @@ struct Instruction: CustomStringConvertible {
             } else {
                 return nil
             }
-            /*
         case "mult":
-            self.type = .ComplexInstruction
-            self.bigOperation = { return Int64($0)*Int64($1) }
-            self.numRegisters = 2
-            self.numImmediates = 0
+            if argCount != 2 {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+                return nil
+            }
+            if let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) {
+                self.type = .ALUR(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), nil, src1, src2)
+                self.pcIncrement = 4
+            } else {
+                return nil
+            }
         case "multu":
-            self.type = .ComplexInstruction
-            self.bigOperation = { return Int64((UInt64($0)*UInt64($1)).value) }
-            self.numRegisters = 2
-            self.numImmediates = 0
+            if argCount != 2 {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+                return nil
+            }
+            if let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) {
+                self.type = .ALUR(.Right({ let fullValue = UInt64($0)*UInt64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), nil, src1, src2)
+                self.pcIncrement = 4
+            } else {
+                return nil
+            }
+        case "mul":
+            // Multiplication pseudoinstruction, which stores the lower 32 bits of src1*src2 in the destination
+            if argCount != 3 {
+                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
+                return nil
+            }
+            if args[3].rangeOfString(registerDelimiter) != nil {
+                // Second source is a register
+                if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) {
+                    self.type = .ALUR(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
+                    self.pcIncrement = 8
+                } else {
+                    return nil
+                }
+            } else {
+                // Second source is an immediate
+                if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) {
+                    self.type = .ALUI(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
+                    self.pcIncrement = 8
+                } else {
+                    return nil
+                }
+            }
         case "div":
-            self.type = .ComplexInstruction
-            self.bigOperation = {
-                let quotient = $0 / $1 // To be stored in lo
-                let remainder = $0 % $1 // To be stored in hi
-                return Int64(remainder) << 32 | Int64(quotient)
+            // May be a real instruction (2 arguments) or a pseudoinstruction (3 arguments)
+            if argCount == 2 {
+                // This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
+                if let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) {
+                    self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
+                    self.pcIncrement = 4
+                } else {
+                    return nil
+                }
+            } else if argCount == 3 {
+                // This is the pseudoinstruction, which takes either an immediate or a register as src2
+                if args[3].rangeOfString(registerDelimiter) != nil {
+                    // Second source is a register
+                    if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) {
+                        self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
+                        self.pcIncrement = 8
+                    } else {
+                        return nil
+                    }
+                } else {
+                    // Second source is an immediate
+                    if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) {
+                        self.type = .ALUI(.Right({ return ($0%$1, $0/$1) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
+                        self.pcIncrement = 8
+                    } else {
+                        return nil
+                    }
+                }
+            } else {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).") // Usage for real instruction
+                return nil
             }
-            self.numRegisters = 2
-            self.numImmediates = 0
         case "divu":
-            self.type = .ComplexInstruction
-            self.bigOperation = {
-                let u1 = UInt32($0)
-                let u2 = UInt32($1)
-                let quotient = u1 / u2 // To be stored in lo
-                let remainder = u1 % u2 // To be stored in hi
-                return Int64(remainder) << 32 | Int64(quotient)
+            // May be a real instruction (2 arguments) or a pseudoinstruction (3 arguments)
+            if argCount == 2 {
+                // This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
+                if let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) {
+                    self.type = .ALUR(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
+                    self.pcIncrement = 4
+                } else {
+                    return nil
+                }
+            } else if argCount == 3 {
+                // This is the pseudoinstruction, which takes either an immediate or a register as src2
+                if args[3].rangeOfString(registerDelimiter) != nil {
+                    // Second source is a register
+                    if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) {
+                        self.type = .ALUR(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
+                        self.pcIncrement = 8 // TODO validate
+                    } else {
+                        return nil
+                    }
+                } else {
+                    // Second source is an immediate
+                    if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) {
+                        self.type = .ALUI(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the divion result
+                        self.pcIncrement = 8 // TODO validate
+                    } else {
+                        return nil
+                    }
+                }
+            } else {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).") // Usage for real instruction
+                return nil
             }
-            self.numRegisters = 2
-            self.numImmediates = 0
-        */
+        case "rem":
+            // Pseudoinstruction that stores the remainder of src1/src2 (i.e. src1%src2) in the destination
+            if argCount != 3 {
+                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
+                return nil
+            }
+            if args[3].rangeOfString(registerDelimiter) != nil {
+                // Second source is a register
+                if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) {
+                    self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, true), dest, src1, src2) // Want the boolean (moveFromHi) to be true; want the remainder result
+                    self.pcIncrement = 8
+                } else {
+                    return nil
+                }
+            } else {
+                // Second source is an immediate
+                if let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) {
+                    self.type = .ALUI(.Right({ return ($0%$1, $0/$1) }, true), dest, src1, src2) // Want the boolean (moveFromHi) to be true; want the remainder result
+                    self.pcIncrement = 8
+                } else {
+                    return nil
+                }
+            }
         default:
             return nil
         }
