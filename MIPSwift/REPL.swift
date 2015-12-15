@@ -445,38 +445,38 @@ class REPL {
     }
     
     func executeSyscall() {
-        if let syscallCode = SyscallCode(rawValue: self.registers.get("$v0")) {
-            switch(syscallCode) {
-            case .PrintInt:
-                // Print the integer currently in $a0
-                print(self.registers.get("$a0"))
-            case .PrintString:
-                // Print the string that starts at address $a0 and go until '\0' is found
-                let address = self.registers.get("$a0")
-                print("TODO: read string at \(address)")
-            case .ReadInt:
-                // Read an integer from standard input and return it in $v0
-                // Maximum of 2147483647, minimum of -2147483648
-                let inputString: String = NSString(data: stdIn.availableData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
-                if let value = Int32(inputString) {
-                    self.registers.set("$v0", value)
-                } else {
-                    print("Invalid input for ReadInt syscall: \(inputString).")
-                }
-            case .Exit:
-                // The assembly program has exited, so exit the interpreter as well
-                print("Program terminated with exit code 0.")
-                self.executeCommand(.Exit)
-            case .Exit2:
-                // The assembly program has exited with exit code in $a0
-                print("Program terminated with exit code \(self.registers.get("$a0"))")
-                self.executeCommand(.Exit)
-            default:
-                print("Syscall code unimplemented: \(self.registers.get("$v0"))")
-            }
-        } else {
-            // Don't assert fail for now, just output
+        guard let syscallCode = SyscallCode(rawValue: self.registers.get("$v0")) else {
+            // Don't fatalError() for now, just output
             print("Invalid syscall code: \(self.registers.get("$v0"))")
+            return
+        }
+        switch(syscallCode) {
+        case .PrintInt:
+            // Print the integer currently in $a0
+            print(self.registers.get("$a0"))
+        case .PrintString:
+            // Print the string that starts at address $a0 and go until '\0' is found
+            let address = self.registers.get("$a0")
+            print("TODO: read string at \(address)")
+        case .ReadInt:
+            // Read an integer from standard input and return it in $v0
+            // Maximum of 2147483647, minimum of -2147483648
+            let inputString: String = NSString(data: stdIn.availableData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
+            guard let value = Int32(inputString) else {
+                print("Invalid input for ReadInt syscall: \(inputString).")
+                break
+            }
+            self.registers.set("$v0", value)
+        case .Exit:
+            // The assembly program has exited, so exit the interpreter as well
+            print("Program terminated with exit code 0.")
+            self.executeCommand(.Exit)
+        case .Exit2:
+            // The assembly program has exited with exit code in $a0
+            print("Program terminated with exit code \(self.registers.get("$a0"))")
+            self.executeCommand(.Exit)
+        default:
+            print("Syscall code unimplemented: \(self.registers.get("$v0"))")
         }
     }
     
