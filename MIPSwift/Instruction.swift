@@ -143,158 +143,153 @@ struct Instruction: CustomStringConvertible {
         let argCount = args.count - 1 // Don't count the actual instruction
         if args[0][0] == directiveDelimiter {
             // Requires a significant amount of additional parsing to make sure arguments are in order
-            if let directive = DotDirective(rawValue: args[0]) {
-                switch(directive) {
-                case .Align:
-                    // Align current address to be on a 2^n-byte boundary; 1 argument, must be 0, 1, or 2
-                    self.pcIncrement = 0
-                    if argCount != 1 {
-                        print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
-                        return nil
-                    } else if !["0", "1", "2"].contains(args[1]) {
-                        print("Invalid alignment factor: \(args[1])")
-                        return nil
-                    }
-                case .Data, .Text:
-                    // Change to data segment (address may be supplied; unimplemented as of now)
-                    self.pcIncrement = 0
-                    if argCount != 0 {
-                        print("Directive \(directive.rawValue) expects 0 arguments, got \(argCount).")
-                        return nil
-                    }
-                case .Global:
-                    // Declare a global label; 1 argument
-                    self.pcIncrement = 0
-                    if argCount != 1 {
-                        print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
-                        return nil
-                    } else if !validLabelRegex.test(args[1]) {
-                        print("Invalid label: \(args[1])")
-                        return nil
-                    }
-                case .Ascii:
-                    // Allocate space for a string (without null terminator); 1 argument, though it may have been split by paring above
-                    if argCount == 0 {
-                        print("Directive \(directive.rawValue) expects 1 argument, got 0.")
-                        return nil
-                    } else {
-                        // Need to ensure that the whitespace from the original instruction's argument isn't lost
-                        if let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) {
-                            if let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex {
-                                let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
-                                let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
-                                if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
-                                    // There is trailing stuff after the string literal is closed, don't allow this
-                                    print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
-                                    return nil
-                                }
-                                do {
-                                    let escapedArgument = try rawArgument.toStringWithEscapeSequences()
-                                    self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
-                                    self.arguments = [args[0], escapedArgument]
-                                } catch _ {
-                                    // Unable to convert escape sequences
-                                    return nil
-                                }
-                            } else {
-                                print("String literal expects closing delimiter.")
-                                return nil
-                            }
-                        } else {
-                            print("Directive \(directive.rawValue) expects string literal.")
-                            return nil
-                        }
-                    }
-                case .Asciiz:
-                    // Allocate space for a string (with null terminator); 1 argument
-                    if argCount == 0 {
-                        print("Directive \(directive.rawValue) expects 1 argument, got 0.")
-                        return nil
-                    } else {
-                        // Need to ensure that the whitespace from the original instruction's argument isn't lost
-                        if let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) {
-                            if let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex {
-                                let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
-                                let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
-                                if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
-                                    // There is trailing stuff after the string literal is closed, don't allow this
-                                    print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
-                                    return nil
-                                }
-                                do {
-                                    let escapedArgument = try rawArgument.toStringWithEscapeSequences()
-                                    self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // No null terminator
-                                    self.arguments = [args[0], escapedArgument]
-                                } catch _ {
-                                    // Unable to convert escape sequences (printed in method)
-                                    return nil
-                                }
-                            } else {
-                                print("String literal expects closing delimiter.")
-                                return nil
-                            }
-                        } else {
-                            print("Directive \(directive.rawValue) expects string literal.")
-                            return nil
-                        }
-                    }
-                case .Space:
-                    // Allocate n bytes
-                    if argCount != 1 {
-                        print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
-                        return nil
-                    }
-                    if let n = Int32(args[1]) where n >= 0 {
-                        self.pcIncrement = n
-                    } else {
-                        print("Invalid number of bytes to allocate: \(args[1])")
-                        return nil
-                    }
-                case .Byte:
-                    // Allocate space for n bytes with initial values
-                    if argCount == 0 {
-                        print("Directive \(directive.rawValue) expects arguments, got none.")
-                        return nil
-                    }
-                    // Ensure every argument can be transformed to an 8-bit integer
-                    var validArgs = true
-                    args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
-                    if !validArgs {
-                        return nil
-                    }
-                    self.pcIncrement = Int32(argCount)
-                case .Half:
-                    // Allocate space for n half-words with initial values
-                    if argCount == 0 {
-                        print("Directive \(directive.rawValue) expects arguments, got none.")
-                        return nil
-                    }
-                    // Ensure every argument can be transformed to a 16-bit integer
-                    var validArgs = true
-                    args[1..<args.count].forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
-                    if !validArgs {
-                        return nil
-                    }
-                    self.pcIncrement = Int32((argCount)*2)
-                case .Word:
-                    // Allocate space for n words with initial values
-                    if argCount == 0 {
-                        print("Directive \(directive.rawValue) expects arguments, got none.")
-                        return nil
-                    }
-                    // Ensure every argument can be transformed to a 32-bit integer
-                    var validArgs = true
-                    args[1..<args.count].forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
-                    if !validArgs {
-                        return nil
-                    }
-                    self.pcIncrement = Int32((argCount)*4)
-                }
-                self.type = .Directive(directive, Array(self.arguments[1..<self.arguments.count]))
-            } else {
+            guard let directive = DotDirective(rawValue: args[0]) else {
                 print("Invalid directive: \(args[0])")
                 return nil
             }
+            switch(directive) {
+            case .Align:
+                // Align current address to be on a 2^n-byte boundary; 1 argument, must be 0, 1, or 2
+                self.pcIncrement = 0
+                if argCount != 1 {
+                    print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
+                    return nil
+                } else if !["0", "1", "2"].contains(args[1]) {
+                    print("Invalid alignment factor: \(args[1])")
+                    return nil
+                }
+            case .Data, .Text:
+                // Change to data segment (address may be supplied; unimplemented as of now)
+                self.pcIncrement = 0
+                if argCount != 0 {
+                    print("Directive \(directive.rawValue) expects 0 arguments, got \(argCount).")
+                    return nil
+                }
+            case .Global:
+                // Declare a global label; 1 argument
+                self.pcIncrement = 0
+                if argCount != 1 {
+                    print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
+                    return nil
+                } else if !validLabelRegex.test(args[1]) {
+                    print("Invalid label: \(args[1])")
+                    return nil
+                }
+            case .Ascii:
+                // Allocate space for a string (without null terminator); 1 argument, though it may have been split by paring above
+                if argCount == 0 {
+                    print("Directive \(directive.rawValue) expects 1 argument, got 0.")
+                    return nil
+                } else {
+                    // Need to ensure that the whitespace from the original instruction's argument isn't lost
+                    guard let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) else {
+                        print("Directive \(directive.rawValue) expects string literal.")
+                        return nil
+                    }
+                    guard let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex else {
+                        print("String literal expects closing delimiter.")
+                        return nil
+                    }
+                    let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
+                    let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
+                    if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
+                        // There is trailing stuff after the string literal is closed, don't allow this
+                        print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
+                        return nil
+                    }
+                    do {
+                        let escapedArgument = try rawArgument.toStringWithEscapeSequences()
+                        self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
+                        self.arguments = [args[0], escapedArgument]
+                    } catch _ {
+                        // Unable to convert escape sequences
+                        return nil
+                    }
+                }
+            case .Asciiz:
+                // Allocate space for a string (with null terminator); 1 argument
+                if argCount == 0 {
+                    print("Directive \(directive.rawValue) expects 1 argument, got 0.")
+                    return nil
+                } else {
+                    // Need to ensure that the whitespace from the original instruction's argument isn't lost
+                    guard let stringBeginningRange = self.rawString.rangeOfString(stringLiteralDelimiter) else {
+                        print("Directive \(directive.rawValue) expects string literal.")
+                        return nil
+                    }
+                    guard let stringEndRange = self.rawString.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex else {
+                        print("String literal expects closing delimiter.")
+                        return nil
+                    }
+                    let rawArgument = self.rawString.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
+                    let directivePart = self.rawString[self.rawString.startIndex..<stringBeginningRange.endIndex]
+                    if directivePart.characters.count + rawArgument.characters.count + 1 != self.rawString.characters.count {
+                        // There is trailing stuff after the string literal is closed, don't allow this
+                        print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
+                        return nil
+                    }
+                    do {
+                        let escapedArgument = try rawArgument.toStringWithEscapeSequences()
+                        self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // Include null terminator
+                        self.arguments = [args[0], escapedArgument]
+                    } catch _ {
+                        // Unable to convert escape sequences (printed in method)
+                        return nil
+                    }
+                }
+            case .Space:
+                // Allocate n bytes
+                if argCount != 1 {
+                    print("Directive \(directive.rawValue) expects 1 argument, got \(argCount).")
+                    return nil
+                }
+                if let n = Int32(args[1]) where n >= 0 {
+                    self.pcIncrement = n
+                } else {
+                    print("Invalid number of bytes to allocate: \(args[1])")
+                    return nil
+                }
+            case .Byte:
+                // Allocate space for n bytes with initial values
+                if argCount == 0 {
+                    print("Directive \(directive.rawValue) expects arguments, got none.")
+                    return nil
+                }
+                // Ensure every argument can be transformed to an 8-bit integer
+                var validArgs = true
+                args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                if !validArgs {
+                    return nil
+                }
+                self.pcIncrement = Int32(argCount)
+            case .Half:
+                // Allocate space for n half-words with initial values
+                if argCount == 0 {
+                    print("Directive \(directive.rawValue) expects arguments, got none.")
+                    return nil
+                }
+                // Ensure every argument can be transformed to a 16-bit integer
+                var validArgs = true
+                args[1..<args.count].forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                if !validArgs {
+                    return nil
+                }
+                self.pcIncrement = Int32((argCount)*2)
+            case .Word:
+                // Allocate space for n words with initial values
+                if argCount == 0 {
+                    print("Directive \(directive.rawValue) expects arguments, got none.")
+                    return nil
+                }
+                // Ensure every argument can be transformed to a 32-bit integer
+                var validArgs = true
+                args[1..<args.count].forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+                if !validArgs {
+                    return nil
+                }
+                self.pcIncrement = Int32((argCount)*4)
+            }
+            self.type = .Directive(directive, Array(self.arguments[1..<self.arguments.count]))
             return
         }
         

@@ -121,8 +121,7 @@ class RegisterFile: CustomStringConvertible {
         case "lo":
             return self.lo
         default:
-            assertionFailure("Invalid register reference: \(name)")
-            return INT32_MAX
+            fatalError("Invalid register reference: \(name)")
         }
     }
     
@@ -130,7 +129,7 @@ class RegisterFile: CustomStringConvertible {
         // Set a register's value by its name or alias
         switch(name) {
         case "$zero", "$0":
-            assertionFailure("Cannot change immutable register $zero")
+            fatalError("Cannot change immutable register $zero")
         case "$at", "$1":
             self.at = value
         case "$v0", "$2":
@@ -200,7 +199,7 @@ class RegisterFile: CustomStringConvertible {
         case "lo":
             self.lo = value
         default:
-            assertionFailure("Invalid register reference: \(name)")
+            fatalError("Invalid register reference: \(name)")
         }
     }
     

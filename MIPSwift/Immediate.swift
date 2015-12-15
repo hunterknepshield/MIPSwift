@@ -20,11 +20,10 @@ struct Immediate {
     
     // Attempt to initialize an immediate value from a string; may fail
     init?(_ string: String) {
-        if let immValue = Int16(string) {
-            self.value = immValue
-        } else {
+        guard let immValue = Int16(string) else {
             print("Unable to create immediate value from string: \(string)")
             return nil
         }
+        self.value = immValue
     }
 }

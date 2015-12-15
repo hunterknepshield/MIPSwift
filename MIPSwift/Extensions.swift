@@ -146,7 +146,7 @@ extension Int32 {
                 case "f", "F":
                     binaryString += "1111"
                 default:
-                    assertionFailure("Invalid character in hex string: \(char)")
+                    fatalError("Invalid character in hex string: \(char)")
                 }
             }
             return binaryString

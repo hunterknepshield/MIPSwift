@@ -190,22 +190,22 @@ class REPL {
             labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.toHexWith0x())") })
         case .Label(let label):
             // Print the location of the given label
-            if let location = labelsToLocations[label] {
-                print("\(label): \(location.toHexWith0x())")
-            } else {
+            guard let location = labelsToLocations[label] else {
                 print("\(label): (undefined)")
+                break
             }
+            print("\(label): \(location.toHexWith0x())")
         case .InstructionDump:
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
             locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1)") })
         case .Instruction(let location):
             // Print the instruction at the given location
-            if let instruction = locationsToInstructions[location] {
-                print("\t\(instruction)")
-            } else {
+            guard let instruction = locationsToInstructions[location] else {
                 print("Invalid location: \(location.toHexWith0x())")
+                break
             }
+            print("\t\(instruction)")
         case .AutoDump:
             // Toggle current auto-dump setting
             self.autodump = !self.autodump
@@ -278,14 +278,14 @@ class REPL {
             print("Outputting register file using octal print formatting.")
         case .UseFile(let filename):
             // The user has specified an input file to read
-            if let openFile = NSFileHandle(forReadingAtPath: filename) {
-                self.usingFile = true
-                self.inputSource = openFile
-                self.autoexecute = false // Disable for good measure
-                print("Opened file: \(filename)")
-            } else {
+            guard let openFile = NSFileHandle(forReadingAtPath: filename) else {
                 print("Unable to open file: \(filename).")
+                break
             }
+            self.usingFile = true
+            self.inputSource = openFile
+            self.autoexecute = false // Disable for good measure
+            print("Opened file: \(filename)")
         case .Invalid(let invalid):
             print("Invalid command: \(invalid)")
         }
@@ -307,7 +307,7 @@ class REPL {
             switch(op) {
             case .Left(let op32):
                 let result = op32(src1Value, src2Value)
-                self.registers.set(dest!.name, result)
+                self.registers.set(dest!.name, result) // Destination guaranteed to be non-nil
             case .Right(let (op64, moveFromHi)):
                 // This is a div/mult instruction or a div/rem/mul pseudoinstruction
                 let (hiValue, loValue) = op64(src1Value, src2Value)
@@ -367,7 +367,7 @@ class REPL {
                     print("TODO store \(valueToStore32)")
                 default:
                     // Never reached
-                    assertionFailure("Invalid size of store word: \(size)")
+                    fatalError("Invalid size of store word: \(size)")
                 }
             } else {
                 // Loading a value from memory into memReg
@@ -396,8 +396,7 @@ class REPL {
                     break
                 default:
                     // Never reached
-                    assertionFailure("Invalid size of load word: \(size)")
-                    loadedValue = INT32_MAX
+                    fatalError("Invalid size of load word: \(size)")
                 }
                 self.registers.set(memReg.name, loadedValue)
             }
@@ -407,12 +406,10 @@ class REPL {
             case .Left(let reg):
                 destinationAddress = self.registers.get(reg.name)
             case .Right(let label):
-                if let loc = labelsToLocations[label] {
-                    destinationAddress = loc
-                } else {
-                    assertionFailure("Undefined label: \(label)")
-                    destinationAddress = INT32_MAX
+                guard let loc = labelsToLocations[label] else {
+                    fatalError("Undefined label: \(label)")
                 }
+                destinationAddress = loc
             }
             if link {
                 self.registers.set(ra.name, self.currentPc)
@@ -424,12 +421,11 @@ class REPL {
             let reg2Value = self.registers.get(src2.name)
             if op(reg1Value, reg2Value) {
                 // Take this branch
-                if let loc = labelsToLocations[dest] {
-                    self.registers.set(pc.name, loc)
-                    self.currentPc = loc
-                } else {
-                    assertionFailure("Undefined label: \(dest)")
+                guard let loc = labelsToLocations[dest] else {
+                    fatalError("Undefined label: \(dest)")
                 }
+                self.registers.set(pc.name, loc)
+                self.currentPc = loc
             }
         case .Directive(_, _):
             // Abstract this away; large amount of parsing required
@@ -510,7 +506,7 @@ class REPL {
                 case 2:
                     break
                 default:
-                    assertionFailure("Invalid alignment: \(n)")
+                    fatalError("Invalid alignment: \(n)")
                 }
             case .Space:
                 // Allocate n bytes
@@ -536,7 +532,7 @@ class REPL {
                 print("Allocate string: \(string)")
             }
         } else {
-            assertionFailure("Attempting to execute illegal directive: \(instruction)")
+            fatalError("Attempting to execute illegal directive: \(instruction)")
         }
     }
 }

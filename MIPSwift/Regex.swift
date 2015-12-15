@@ -12,13 +12,14 @@ class Regex {
     let expression: NSRegularExpression
     let pattern: String
     
-    init(_ pattern : String){
+    init?(_ pattern : String) {
         self.pattern = pattern
         do {
             try self.expression = NSRegularExpression(pattern: pattern, options: [])
         } catch {
-            // Do nothing
+            // Fail
             self.expression = NSRegularExpression()
+            return nil
         }
     }
     

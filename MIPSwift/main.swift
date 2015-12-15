@@ -39,19 +39,18 @@ for (index, argument) in args.enumerate() {
         if index < args.count - 1 {
             // There's at least 1 more argument, assume it's the file name
             let filename = args[index + 1]
-            if let fileHandle = NSFileHandle(forReadingAtPath: filename) {
-                defaultOptions.inputSource = fileHandle
-                developerOptions.inputSource = fileHandle
-            } else {
-                assertionFailure("Unable to open file: \(filename)")
+            guard let fileHandle = NSFileHandle(forReadingAtPath: filename) else {
+                fatalError("Unable to open file: \(filename)")
             }
+            defaultOptions.inputSource = fileHandle
+            developerOptions.inputSource = fileHandle
             defaultOptions.usingFile = true
             developerOptions.usingFile = true
             // Also turn off auto-execute, as labels may be used before they're defined within a file
             defaultOptions.autoexecute = false
             // developerOptions.autoexecute is already false
         } else {
-            assertionFailure("Input file \(argument) argument specified, but no file name present.")
+            fatalError("Input file \(argument) argument specified, but no file name present.")
         }
     default:
         print("Illegal argument: \(argument)")
