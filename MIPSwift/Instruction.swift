@@ -329,7 +329,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left({ return (args[0] == "slt" ? ($0 < $1) : ($0.unsigned() < $1.unsigned())) ? 1 : 0 }), dest, src1, src2)
+            self.type = .ALUR(.Left(args[0] == "slt" ? { return $0 < $1 ? 1 : 0 } : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }), dest, src1, src2)
             self.pcIncrement = 4
         case "sllv", "srlv":
             // SRL is essentially unsigned right shift
@@ -340,7 +340,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left({ return (string == "sllv" ? ($0 << $1) : ($0.unsigned() >> $1.unsigned()).signed()) }), dest, src1, src2)
+            self.type = .ALUR(.Left(args[0] == "sllv" ? (<<) : { return ($0.unsigned() >> $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
         // ALU-I operations
         case "addi", "addiu":
@@ -371,7 +371,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left({ return (args[0] == "slti" ? ($0 < $1) : ($0.unsigned() < $1.unsigned())) ? 1 : 0 }), dest, src1, src2)
+            self.type = .ALUI(.Left(args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }), dest, src1, src2)
             self.pcIncrement = 4
         case "sll", "sra", "srl":
             // SLL and SRA are default implementations for signed Int types, SRL is basically unsigned right shift
@@ -382,7 +382,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left({ return string == "sll" ? ($0 << $1) : string == "sra" ? ($0 >> $1) : ($0.unsigned() >> $1.unsigned()).signed() }), dest, src1, src2)
+            self.type = .ALUI(.Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() })), dest, src1, src2)
             self.pcIncrement = 4
         // Memory operations
         case "lw", "lh", "lb", "sw", "sh", "sb":
@@ -434,20 +434,22 @@ struct Instruction: CustomStringConvertible {
             guard let src1 = Register(args[1], writing: false) else {
                 return nil
             }
+            let link = args[0] == "bgezal" || args[0] == "blzal"
+            // All comparisons are with zero as the second argument
             let op: OperationBool
             switch(args[0]) {
             case "bgez", "bgezal":
-                op = { return $0 >= $1 }
+                op = (>=)
             case "blz", "blzal":
-                op = { return $0 < $1 }
+                op = (<)
             case "bgtz":
-                op = { return $0 > $1 }
+                op = (>)
             case "bltez":
-                op = { return $0 <= $1 }
+                op = (<=)
             default:
                 fatalError("Invalid branch instruction \(args[0])")
             }
-            self.type = .Branch(op, args[0] == "bgezal" || args[0] == "blzal", src1, zero, args[2])
+            self.type = .Branch(op, link, src1, zero, args[2])
             self.pcIncrement = 4
         // More complex instructions, mostly pseudo-instructions
         case "li":
@@ -488,7 +490,7 @@ struct Instruction: CustomStringConvertible {
             guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Right({ let fullValue = (string == "mult" ? $0.signed64()*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), nil, src1, src2)
+            self.type = .ALUR(.Right({ let fullValue = (args[0] == "mult" ? $0.signed64()*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), nil, src1, src2)
             self.pcIncrement = 4
         case "mul":
             // Multiplication pseudoinstruction, which stores the lower 32 bits of src1*src2 in the destination
