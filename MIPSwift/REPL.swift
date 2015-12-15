@@ -16,6 +16,7 @@ class REPL {
     var pausedPc: Int32? // Keep track of where execution was last paused
     var labelsToLocations = [String : Int32]() // Maps labels to locations
     var locationsToInstructions = [Int32 : Instruction]() // Maps locations to instructions
+    var memory = [Int32 : UInt8]() // Maps locations to memory
     var verbose = false
     var autodump = false
     var autoexecute = true
@@ -407,7 +408,7 @@ class REPL {
                 destinationAddress = self.registers.get(reg.name)
             case .Right(let label):
                 guard let loc = labelsToLocations[label] else {
-                    fatalError("Undefined label: \(label)")
+                    fatalError("Undefined label: \(label)") // Not checked until execution to allow labels do be defined anywhere before running
                 }
                 destinationAddress = loc
             }
@@ -416,16 +417,19 @@ class REPL {
             }
             self.registers.set(pc.name, destinationAddress)
             self.currentPc = destinationAddress
-        case let .Branch(op, src1, src2, dest):
+        case let .Branch(op, link, src1, src2, dest):
             let reg1Value = self.registers.get(src1.name)
             let reg2Value = self.registers.get(src2.name)
             if op(reg1Value, reg2Value) {
                 // Take this branch
-                guard let loc = labelsToLocations[dest] else {
-                    fatalError("Undefined label: \(dest)")
+                guard let destinationAddress = labelsToLocations[dest] else {
+                    fatalError("Undefined label: \(dest)") // Not checked until execution to allow labels do be defined anywhere before running
                 }
-                self.registers.set(pc.name, loc)
-                self.currentPc = loc
+                if link {
+                    self.registers.set(ra.name, self.currentPc)
+                }
+                self.registers.set(pc.name, destinationAddress)
+                self.currentPc = destinationAddress
             }
         case .Directive(_, _):
             // Abstract this away; large amount of parsing required

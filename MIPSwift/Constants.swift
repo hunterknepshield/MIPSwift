@@ -13,6 +13,7 @@ let mipswiftVersion = 1.0
 let commandLineOptions = "[-d] [-noae] [-f file]"
 let beginningPc: Int32 = 0x00400000
 let beginningMem: Int32 = 0x10000000
+let beginningStack: Int32 = 0x7FFFEB38
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
 
 // Constants to aid with parsing logic

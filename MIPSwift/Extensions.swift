@@ -10,6 +10,8 @@ import Foundation
 
 enum StringParsingError: ErrorType { case InvalidEscape, InvalidDelimiter }
 
+// MARK: String subscripting
+
 extension String {
     // Extend String to allow subscripting for easier input parsing
     subscript (i: Int) -> Character {
@@ -103,6 +105,8 @@ extension String {
     // Axiom: self == self.toStringWithEscapeSequences().toStringWithLiteralEscapes()
 }
 
+// MARK: Convenience print formatting for integer types
+
 extension Int32 {
     // Extend Int32 with the capability to format printing
     func format(f: String) -> String {
@@ -166,4 +170,68 @@ extension Int16 {
     func format(f: String) -> String {
         return NSString(format: f, self) as String
     }
+}
+
+// MARK: Convenience conversions between signed/unsigned/different bitlength integer types
+
+extension Int32 {
+    // Quick way to convert to an unsigned 32-bit representation
+    func unsigned() -> UInt32 {
+        return UInt32(bitPattern: self)
+    }
+    
+    // Quick way to convert to a signed 64-bit representation
+    func signed64() -> Int64 {
+        return Int64(self)
+    }
+    
+    // Quick way to convert to an unsigned 64-bit representation
+    func unsigned64() -> UInt64 {
+        return UInt64(bitPattern: self.signed64())
+    }
+}
+
+extension UInt32 {
+    // Quick way to convert to a signed 32-bit representation
+    func signed() -> Int32 {
+        return Int32(bitPattern: self)
+    }
+    
+    // Other methods can be accessed through UInt32.signed().[signed64(), unsigned64()]
+}
+
+extension Int64 {
+    // Quick way to convert to an unsigned 64-bit representation
+    func unsigned() -> UInt64 {
+        return UInt64(bitPattern: self)
+    }
+
+    // Quick way to convert lower 32 bits to an unsigned 32-bit representation
+    func unsignedLower32() -> UInt32 {
+        return UInt32(truncatingBitPattern: self.unsigned())
+    }
+    
+    // Quick way to convert lower 32 bits to a signed 32-bit representation
+    func signedLower32() -> Int32 {
+        return self.unsignedLower32().signed()
+    }
+    
+    // Quick way to convert upper 32 bits to an unsigned 32-bit representation
+    func unsignedUpper32() -> UInt32 {
+        return UInt32(truncatingBitPattern: self.unsigned() >> 32)
+    }
+    
+    // Quick way to convert upper 32 bits to a signed 32-bit representation
+    func signedUpper32() -> Int32 {
+        return self.unsignedUpper32().signed()
+    }
+}
+
+extension UInt64 {
+    // Quick way to convert to a signed 64-bit representation
+    func signed() -> Int64 {
+        return Int64(bitPattern: self)
+    }
+    
+    // Other methods can be accessed through UInt64.signed().[unsignedLower32(), signedLower32(), unsignedUpper32(), signedUpper32()]
 }

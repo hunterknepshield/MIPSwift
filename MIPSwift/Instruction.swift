@@ -23,7 +23,7 @@ enum InstructionType {
     case ALUI(Either<Operation32, (Operation64, Bool)>, Register, Register, Immediate)
     case Memory(Bool, Int, Register, Immediate, Register)
     case Jump(Bool, Either<Register, String>) // Technically, J-type instructions store an integer value that's the offset from the current program counter
-    case Branch(OperationBool, Register, Register, String)
+    case Branch(OperationBool, Bool, Register, Register, String)
     // Special Instruction types
     case Syscall // System call; e.g. reading input, printing, etc.
     case Directive(DotDirective, [String]) // Dot directive with arugments; e.g. .data, .text, etc.
@@ -291,7 +291,7 @@ struct Instruction: CustomStringConvertible {
             self.type = .Syscall
             self.pcIncrement = 4
         // ALU-R operations
-        case "add":
+        case "add", "addu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -299,9 +299,9 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left(+), dest, src1, src2)
+            self.type = .ALUR(.Left(args[0] == "add" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
-        case "addu":
+        case "sub", "subu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -309,9 +309,9 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left({ return Int32((UInt32($0) + UInt32($1)).value) }), dest, src1, src2)
+            self.type = .ALUR(.Left(args[0] == "sub" ? (&-) : { return ($0.unsigned() &- $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
-        case "sub":
+        case "and", "or", "xor":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -319,9 +319,9 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left(-), dest, src1, src2)
+            self.type = .ALUR(.Left(args[0] == "and" ? (&) : (args[0] == "or" ? (|) : (^))), dest, src1, src2)
             self.pcIncrement = 4
-        case "subu":
+        case "slt", "sltu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -329,9 +329,10 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left({ return Int32((UInt32($0) - UInt32($1)).value) }), dest, src1, src2)
+            self.type = .ALUR(.Left({ return (args[0] == "slt" ? ($0 < $1) : ($0.unsigned() < $1.unsigned())) ? 1 : 0 }), dest, src1, src2)
             self.pcIncrement = 4
-        case "and":
+        case "sllv", "srlv":
+            // SRL is essentially unsigned right shift
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -339,60 +340,10 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left(&), dest, src1, src2)
-            self.pcIncrement = 4
-        case "or":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Left(|), dest, src1, src2)
-            self.pcIncrement = 4
-        case "xor":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Left(^), dest, src1, src2)
-            self.pcIncrement = 4
-        case "slt":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Left({ return $0 < $1 ? 1 : 0 }), dest, src1, src2)
-            self.pcIncrement = 4
-        case "sltu":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Left({ return UInt32($0) < UInt32($1) ? 1 : 0 }), dest, src1, src2)
-            self.pcIncrement = 4
-        case "sllv":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Left({ return $0 << $1 }), dest, src1, src2)
+            self.type = .ALUR(.Left({ return (string == "sllv" ? ($0 << $1) : ($0.unsigned() >> $1.unsigned()).signed()) }), dest, src1, src2)
             self.pcIncrement = 4
         // ALU-I operations
-        case "addi":
+        case "addi", "addiu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -400,9 +351,9 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left(+), dest, src1, src2)
+            self.type = .ALUI(.Left(args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
-        case "addiu":
+        case "andi", "ori", "xori":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -410,9 +361,9 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left({ return Int32((UInt32($0) + UInt32($1)).value) }), dest, src1, src2)
+            self.type = .ALUI(.Left(args[0] == "andi" ? (&) : (args[0] == "ori" ? (|) : (^))), dest, src1, src2)
             self.pcIncrement = 4
-        case "andi":
+        case "slti", "sltiu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -420,9 +371,10 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left(&), dest, src1, src2)
+            self.type = .ALUI(.Left({ return (args[0] == "slti" ? ($0 < $1) : ($0.unsigned() < $1.unsigned())) ? 1 : 0 }), dest, src1, src2)
             self.pcIncrement = 4
-        case "ori":
+        case "sll", "sra", "srl":
+            // SLL and SRA are default implementations for signed Int types, SRL is basically unsigned right shift
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -430,47 +382,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
-            self.type = .ALUI(.Left(|), dest, src1, src2)
-            self.pcIncrement = 4
-        case "xori":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                return nil
-            }
-            self.type = .ALUI(.Left(^), dest, src1, src2)
-            self.pcIncrement = 4
-        case "slti":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                return nil
-            }
-            self.type = .ALUI(.Left({ return $0 < $1 ? 1 : 0 }), dest, src1, src2)
-            self.pcIncrement = 4
-        case "sltiu":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                return nil
-            }
-            self.type = .ALUI(.Left({ return UInt32($0) < UInt32($1) ? 1 : 0 }), dest, src1, src2)
-            self.pcIncrement = 4
-        case "sll":
-            if argCount != 3 {
-                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-                return nil
-            }
-            guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                return nil
-            }
-            self.type = .ALUI(.Left({ return $0 << $1 }), dest, src1, src2)
+            self.type = .ALUI(.Left({ return string == "sll" ? ($0 << $1) : string == "sra" ? ($0 >> $1) : ($0.unsigned() >> $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
         // Memory operations
         case "lw", "lh", "lb", "sw", "sh", "sb":
@@ -486,21 +398,14 @@ struct Instruction: CustomStringConvertible {
             self.type = .Memory(storing, size, memReg, offset, addrReg)
             self.pcIncrement = 4
         // Jump instructions
-        case "j":
+        case "j", "jal":
             if argCount != 1 {
                 print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
                 return nil
             }
-            self.type = .Jump(false, .Right(args[1]))
+            self.type = .Jump(args[0] == "jal", .Right(args[1]))
             self.pcIncrement = 4
-        case "jal":
-            if argCount != 1 {
-                print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
-                return nil
-            }
-            self.type = .Jump(true, .Right(args[1]))
-            self.pcIncrement = 4
-        case "jr":
+        case "jr", "jalr":
             if argCount != 1 {
                 print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
                 return nil
@@ -508,17 +413,41 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: false) else {
                 return nil
             }
-            self.type = .Jump(false, .Left(dest))
+            self.type = .Jump(args[0] == "jalr", .Left(dest))
             self.pcIncrement = 4
-        case "jalr":
-            if argCount != 1 {
-                print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
+        // Branch instructions
+        case "beq", "bne":
+            if argCount != 3 {
+                print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
             }
-            guard let dest = Register(args[1], writing: false) else {
+            guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
                 return nil
             }
-            self.type = .Jump(true, .Left(dest))
+            self.type = .Branch({ return args[0] == "beq" ? ($0 == $1) : ($0 != $1) }, false, src1, src2, args[3])
+            self.pcIncrement = 4
+        case "bgez", "bgezal", "blz", "blzal", "bgtz", "bltez":
+            if argCount != 2 {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+                return nil
+            }
+            guard let src1 = Register(args[1], writing: false) else {
+                return nil
+            }
+            let op: OperationBool
+            switch(args[0]) {
+            case "bgez", "bgezal":
+                op = { return $0 >= $1 }
+            case "blz", "blzal":
+                op = { return $0 < $1 }
+            case "bgtz":
+                op = { return $0 > $1 }
+            case "bltez":
+                op = { return $0 <= $1 }
+            default:
+                fatalError("Invalid branch instruction \(args[0])")
+            }
+            self.type = .Branch(op, args[0] == "bgezal" || args[0] == "blzal", src1, zero, args[2])
             self.pcIncrement = 4
         // More complex instructions, mostly pseudo-instructions
         case "li":
@@ -551,7 +480,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .ALUR(.Left(+), dest, args[0] == "mfhi" ? hi : lo, zero)
             self.pcIncrement = 4
-        case "mult":
+        case "mult", "multu":
             if argCount != 2 {
                 print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
                 return nil
@@ -559,17 +488,7 @@ struct Instruction: CustomStringConvertible {
             guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), nil, src1, src2)
-            self.pcIncrement = 4
-        case "multu":
-            if argCount != 2 {
-                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
-                return nil
-            }
-            guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
-                return nil
-            }
-            self.type = .ALUR(.Right({ let fullValue = UInt64($0)*UInt64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), nil, src1, src2)
+            self.type = .ALUR(.Right({ let fullValue = (string == "mult" ? $0.signed64()*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), nil, src1, src2)
             self.pcIncrement = 4
         case "mul":
             // Multiplication pseudoinstruction, which stores the lower 32 bits of src1*src2 in the destination
@@ -582,78 +501,29 @@ struct Instruction: CustomStringConvertible {
                 guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                     return nil
                 }
-                self.type = .ALUR(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
+                self.type = .ALUR(.Right({ let fullValue = $0.signed64()&*$1.signed64(); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
                 self.pcIncrement = 8
             } else {
                 // Second source is an immediate
                 guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                     return nil
                 }
-                self.type = .ALUI(.Right({ let fullValue = Int64($0)*Int64($1); return (Int32(fullValue >> 32), Int32(fullValue & 0xFFFF)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
+                self.type = .ALUI(.Right({ let fullValue = $0.signed64()&*$1.signed64(); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
                 self.pcIncrement = 8
             }
-        case "div":
-            // May be a real instruction (2 arguments) or a pseudoinstruction (3 arguments)
-            if argCount == 2 {
-                // This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
-                guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
-                    return nil
-                }
-                self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
-                self.pcIncrement = 4
-            } else if argCount == 3 {
-                // This is the pseudoinstruction, which takes either an immediate or a register as src2
-                if args[3].rangeOfString(registerDelimiter) != nil {
-                    // Second source is a register
-                    guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                        return nil
-                    }
-                    self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
-                    self.pcIncrement = 8
-                } else {
-                    // Second source is an immediate
-                    guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                        return nil
-                    }
-                    self.type = .ALUI(.Right({ return ($0%$1, $0/$1) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
-                    self.pcIncrement = 8
-                }
-            } else {
-                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).") // Usage for real instruction
+        case "div" where argCount != 3, "divu":
+            if argCount != 2 {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
                 return nil
             }
-        case "divu":
-            // May be a real instruction (2 arguments) or a pseudoinstruction (3 arguments)
-            if argCount == 2 {
-                // This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
-                guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
-                    return nil
-                }
-                self.type = .ALUR(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
-                self.pcIncrement = 4
-            } else if argCount == 3 {
-                // This is the pseudoinstruction, which takes either an immediate or a register as src2
-                if args[3].rangeOfString(registerDelimiter) != nil {
-                    // Second source is a register
-                    guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
-                        return nil
-                    }
-                    self.type = .ALUR(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the division result
-                    self.pcIncrement = 8 // TODO validate
-                } else {
-                    // Second source is an immediate
-                    guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
-                        return nil
-                    }
-                    self.type = .ALUI(.Right({ let u0 = UInt32($0); let u1 = UInt32($1); return (Int32(u0%u1), Int32(u0/u1)) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the divion result
-                    self.pcIncrement = 8 // TODO validate
-                }
-            } else {
-                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).") // Usage for real instruction
+            // This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
+            guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
                 return nil
             }
-        case "rem":
-            // Pseudoinstruction that stores the remainder of src1/src2 (i.e. src1%src2) in the destination
+            self.type = .ALUR(.Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned(), $1.unsigned()).0.signed(), UInt32.divideWithOverflow($0.unsigned(), $1.unsigned()).0.signed()) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
+            self.pcIncrement = 4
+        case "rem", "div":
+            // Pseudoinstructions that store the remainder or quotient of src1/src2 in the destination
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -663,14 +533,14 @@ struct Instruction: CustomStringConvertible {
                 guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                     return nil
                 }
-                self.type = .ALUR(.Right({ return ($0%$1, $0/$1) }, true), dest, src1, src2) // Want the boolean (moveFromHi) to be true; want the remainder result
+                self.type = .ALUR(.Right({ return (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) }, args[0] == "rem"), dest, src1, src2) // Want the boolean (moveFromHi) to be true if we want the remainder result
                 self.pcIncrement = 8
             } else {
                 // Second source is an immediate
                 guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                     return nil
                 }
-                self.type = .ALUI(.Right({ return ($0%$1, $0/$1) }, true), dest, src1, src2) // Want the boolean (moveFromHi) to be true; want the remainder result
+                self.type = .ALUI(.Right({ return (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) }, args[0] == "rem"), dest, src1, src2) // Want the boolean (moveFromHi) to be true if we want the remainder result
                 self.pcIncrement = 8
             }
         default:

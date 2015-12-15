@@ -10,7 +10,7 @@ import Foundation
 
 class RegisterFile: CustomStringConvertible {
     // User-accessible registers
-    var zero: Int32 { get { return 0 } } // $0, immutable
+    var zero: Int32 { get { return Int32.allZeros } } // $0, immutable
     var at: Int32 = 0 // $1
     var v0: Int32 = 0 // $2
     var v1: Int32 = 0 // $3
