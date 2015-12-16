@@ -184,7 +184,7 @@ class REPL {
         case .RegisterDump:
             // Print the current contents of the register file
             print(registers)
-        case .Register(let name):
+        case .SingleRegister(let name):
             // Register name is already guaranteed to be valid (checked in Command construction)
             let value = self.registers.get(name)
             print("\(name): \(value.format(self.registers.printOption.rawValue))")
@@ -192,7 +192,7 @@ class REPL {
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
             print("All labels currently stored: ", terminator: labelsToLocations.count == 0 ? "(none)\n" : "\n")
             labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.toHexWith0x())") })
-        case .Label(let label):
+        case .SingleLabel(let label):
             // Print the location of the given label
             guard let location = labelsToLocations[label] else {
                 print("\(label): (undefined)")
@@ -203,7 +203,7 @@ class REPL {
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
             locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1)") })
-        case .Instruction(let location):
+        case .SingleInstruction(let location):
             // Print the instruction at the given location
             guard let instruction = locationsToInstructions[location] else {
                 print("Invalid location: \(location.toHexWith0x())")
@@ -277,7 +277,7 @@ class REPL {
             print("\tlabel/l [label]: print the location of a label.")
             print("\tinstructions/insts/instructiondump/instdump/id: print all instructions as well as their locations.")
             print("\tinstruction/inst/i [location]: print the instruction at a location.")
-            print("\tmemory/mem/m [location] [count]: print a number of words beginning at a location in memory.")
+            print("\tmemory/mem/m [location|register] [count]: print a number of words beginning at a location in memory.")
             print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
             print("\toctal/oct: set register dumps to print out values in octal (base 8).")

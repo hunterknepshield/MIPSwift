@@ -15,16 +15,16 @@ enum Command {
     case Trace
     case Verbose
     case RegisterDump
-    case Register(String)
+    case SingleRegister(String)
     case AutoDump
     case Hex
     case Decimal
     case Octal
     case Binary
     case LabelDump
-    case Label(String)
+    case SingleLabel(String)
     case InstructionDump
-    case Instruction(Int32)
+    case SingleInstruction(Int32)
     case Memory(Either<Int32, Register>, Int)
     case Status
     case Help
@@ -61,7 +61,7 @@ enum Command {
                 self = .Invalid("No label name supplied.")
             } else {
                 if validLabelRegex.test(args[0]) {
-                    self = .Label(args.first!)
+                    self = .SingleLabel(args.first!)
                 } else {
                     self = .Invalid("Invalid label: \(args[0])")
                 }
@@ -79,7 +79,7 @@ enum Command {
                 if scanner.scanHexInt(pointer) {
                     if pointer.memory != 0 && pointer.memory < UINT32_MAX {
                         // Safe to make an Int32 from this value
-                        self = .Instruction(Int32(pointer.memory))
+                        self = .SingleInstruction(Int32(pointer.memory))
                     } else {
                         // Unsafe to make an Int32 from this value, just complain
                         self = .Invalid("Invalid location: \(args[0])")
@@ -97,17 +97,18 @@ enum Command {
                         self = .Invalid("Invalid memory location: \(args[0])")
                         break
                     }
-                    let numBytes: Int
+                    let numWords: Int
                     if args.count > 1 {
-                        // User also specified a number of bytes to read
-                        guard let numBytes = Int(args[1]) where numBytes > 0 else {
+                        // User also specified a number of words to read
+                        guard let num = Int(args[1]) where num > 0 else {
                             self = .Invalid("Invalid number of bytes specified: \(args[1])")
-                            break
+							break
                         }
+						numWords = num
                     } else {
-                        numBytes = 4
+                        numWords = 4
                     }
-                    self = .Memory(.Right(reg), numBytes)
+                    self = .Memory(.Right(reg), numWords)
                 } else {
                     // To read a hex value
                     let scanner = NSScanner(string: args[0])
@@ -120,17 +121,18 @@ enum Command {
                             if address % 4 != 0 {
                                 self = .Invalid("Unaligned memory address: \(address.toHexWith0x())")
                             } else {
-                                let numBytes: Int
+                                let numWords: Int
                                 if args.count > 1 {
-                                    // User also specified a number of bytes to read
-                                    guard let numBytes = Int(args[1]) where numBytes > 0 else {
+                                    // User also specified a number of words to read
+                                    guard let num = Int(args[1]) where num > 0 else {
                                         self = .Invalid("Invalid number of bytes specified: \(args[1])")
                                         break
                                     }
+									numWords = num
                                 } else {
-                                    numBytes = 4
+                                    numWords = 4
                                 }
-                                self = .Memory(.Left(address), numBytes)
+                                self = .Memory(.Left(address), numWords)
                             }
                         } else {
                             // Unsafe to make an Int32 from this value, just complain
@@ -148,7 +150,7 @@ enum Command {
                 self = .Invalid("No register supplied.")
             } else {
                 if validRegisters.contains(args[0]) {
-                    self = .Register(args[0])
+                    self = .SingleRegister(args[0])
                 } else {
                     self = .Invalid("Invalid register reference: \(args[0])")
                 }
