@@ -222,11 +222,11 @@ class REPL {
             var words = [Int32]()
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
             for i in 0..<numWords {
-                let address = location + 32*i
+                let address = location + 4*i // Loading in 4-byte chunks
                 let highest = self.memory[address] ?? 0
-                let higher = self.memory[address + 8] ?? 0
-                let lower = self.memory[address + 16] ?? 0
-                let lowest = self.memory[address + 24] ?? 0
+                let higher = self.memory[address + 1] ?? 0
+                let lower = self.memory[address + 2] ?? 0
+                let lowest = self.memory[address + 3] ?? 0
                 words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
 				ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
             }
@@ -390,7 +390,7 @@ class REPL {
             }
         case let .Memory(storing, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
-            let address = addrRegValue + offset.signExtended*8 // Immediate is offset in bytes
+            let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
                 print("Unaligned memory reference: \(address.toHexWith0x())")
                 // TODO disallow
@@ -408,14 +408,14 @@ class REPL {
                     let lower = valueToStore.unsignedLower8()
                     let lowest = valueToStore.unsignedLowest8()
                     self.memory[address] = lower
-                    self.memory[address + 8] = lowest
+                    self.memory[address + 1] = lowest
                 case 2:
                     // Storing a word
                     let (highest, higher, lower, lowest) = valueToStore.toBytes()
                     self.memory[address] = highest
-                    self.memory[address + 8] = higher
-                    self.memory[address + 16] = lower
-                    self.memory[address + 24] = lowest
+                    self.memory[address + 1] = higher
+                    self.memory[address + 2] = lower
+                    self.memory[address + 3] = lowest
                 default:
                     // Never reached
                     fatalError("Invalid size of store word: \(size)")
@@ -429,13 +429,13 @@ class REPL {
                     loadedValue = Int32(highest: 0, higher: 0, lower: 0, lowest: self.memory[address] ?? 0)
                 case 1:
                     // Loading a half-word
-                    loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 8] ?? 0)
+                    loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 1] ?? 0)
                 case 2:
                     // Loading a word
                     let highest = self.memory[address] ?? 0
-                    let higher = self.memory[address + 8] ?? 0
-                    let lower = self.memory[address + 16] ?? 0
-                    let lowest = self.memory[address + 24] ?? 0
+                    let higher = self.memory[address + 1] ?? 0
+                    let lower = self.memory[address + 2] ?? 0
+                    let lowest = self.memory[address + 3] ?? 0
                     loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest)
                 default:
                     // Never reached
