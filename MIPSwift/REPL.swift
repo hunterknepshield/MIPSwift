@@ -294,7 +294,7 @@ class REPL {
             print("\tinstruction|inst|i [location]: print the instruction at a location.")
             print("\tmemory|mem|m [location|register] [count]: print a number of words beginning at a location in memory.")
             print("\thexadecimal|hex: set register dumps to print out values in hexadecimal (base 16).")
-            print("\tdecimal|dec: set register dumps to print out values in decimal (base 10).")
+            print("\tdecimal|dec: set register dumps to print out values in signed decimal (base 10).")
             print("\toctal|oct: set register dumps to print out values in octal (base 8).")
             print("\tbinary|bin: set register dumps to print out values in binary (base 2).")
             print("\tstatus|settings|s: display current interpreter settings.")
@@ -378,7 +378,10 @@ class REPL {
                 let result = op32(src1Value, src2.signExtended)
                 self.registers.set(dest.name, result)
             case .Right(let (op64, moveFromHi)):
-                // This was a div/rem/mul pseudoinstruction
+                // This was a div/rem/mul pseudoinstruction with an immediate
+				// In real MIPS, the immediate is loaded into $at, then the
+				// actual operation is treated the same as the ALU-R type
+				self.registers.set(at.name, src2.signExtended) // Simulates li	$at, [imm]
                 let (hiValue, loValue) = op64(src1Value, src2.signExtended)
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)

@@ -311,7 +311,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .ALUR(.Left(args[0] == "sub" ? (&-) : { return ($0.unsigned() &- $1.unsigned()).signed() }), dest, src1, src2)
             self.pcIncrement = 4
-        case "and", "or", "xor":
+        case "and", "or", "xor", "nor":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
                 return nil
@@ -319,7 +319,7 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left(args[0] == "and" ? (&) : (args[0] == "or" ? (|) : (^))), dest, src1, src2)
+			self.type = .ALUR(.Left(args[0] == "and" ? (&) : (args[0] == "or" ? (|) : (args[0] == "xor" ? (^) : ({ return ~($0 | $1) })))), dest, src1, src2)
             self.pcIncrement = 4
         case "slt", "sltu":
             if argCount != 3 {
@@ -331,7 +331,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .ALUR(.Left(args[0] == "slt" ? { return $0 < $1 ? 1 : 0 } : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }), dest, src1, src2)
             self.pcIncrement = 4
-        case "sllv", "srlv":
+        case "sllv", "srav", "srlv":
             // SRL is essentially unsigned right shift
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
@@ -340,7 +340,8 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
                 return nil
             }
-            self.type = .ALUR(.Left(args[0] == "sllv" ? (<<) : { return ($0.unsigned() >> $1.unsigned()).signed() }), dest, src1, src2)
+			// The register's value is truncated down to the lowest 5 bits to ensure a valid shift range (in real MIPS too)
+			self.type = .ALUR(.Left(args[0] == "sllv" ? { return $0 << ($1 & 0x1F) } : (args[0] == "srav" ? { return $0 >> ($1 & 0x1F)} : { return ($0.unsigned() >> ($1 & 0x1F).unsigned()).signed() })), dest, src1, src2)
             self.pcIncrement = 4
         // ALU-I operations
         case "addi", "addiu":
@@ -383,6 +384,7 @@ struct Instruction: CustomStringConvertible {
                 return nil
             }
             if !(0..<32 ~= src2.value) {
+				// REPL will terminate if it were to attempt executing a bitshift of more than 32 bits
                 print("Invalid shift factor: \(src2.value)")
                 return nil
             }
@@ -525,7 +527,7 @@ struct Instruction: CustomStringConvertible {
                     return nil
                 }
                 self.type = .ALUI(.Right({ let fullValue = $0.signed64()&*$1.signed64(); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), dest, src1, src2) // Want the boolean (moveFromHi) to be false; want the lower 32 bits of the result
-                self.pcIncrement = 8
+                self.pcIncrement = 12
             }
         case "div" where argCount != 3, "divu":
             if argCount != 2 {
@@ -557,7 +559,7 @@ struct Instruction: CustomStringConvertible {
                     return nil
                 }
                 self.type = .ALUI(.Right({ return (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) }, args[0] == "rem"), dest, src1, src2) // Want the boolean (moveFromHi) to be true if we want the remainder result
-                self.pcIncrement = 8
+                self.pcIncrement = 12
             }
         default:
             return nil
