@@ -175,6 +175,21 @@ extension Int16 {
     }
 }
 
+// MARK: Convenience method to convert unsigned 8-bit integers to printable characters
+
+extension UInt8 {
+	func toPrintableCharacter() -> Character {
+		switch(self) {
+		case 0...31, 127:
+			return "." // Mostly things that need escaping; can't print
+		case 32...126:
+			return Character(UnicodeScalar(self))
+		default:
+			return "." // Extended ASCII junk
+		}
+	}
+}
+
 // MARK: Convenience conversions between signed/unsigned/different bitlength integer types
 
 extension Int32 {

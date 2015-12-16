@@ -218,8 +218,9 @@ class REPL {
             case .Right(let reg):
                 location = self.registers.get(reg.name)
             }
-            // Print numBytes of memory starting at location
+            // Print numWords*4 bytes of memory starting at location
             var words = [Int32]()
+			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
             for i in 0..<numWords {
                 let address = location + 32*i
                 let highest = self.memory[address] ?? 0
@@ -227,16 +228,30 @@ class REPL {
                 let lower = self.memory[address + 16] ?? 0
                 let lowest = self.memory[address + 24] ?? 0
                 words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
+				ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
             }
-            var counter = 0
+            var counter = 0 // For formatting individual lines
+			var lineString = "" // The string that will be printed
             words.forEach({
                 if counter % 4 == 0 {
                     // Make new lines every 16 bytes (4 sets of 32 bits)
-                    print("[\((location + counter*4).toHexWith0x())]", terminator: "\t")
+					print("[\((location + counter*4).toHexWith0x())]", terminator: "\t")
                 }
-                print($0.toHexWith0x(), terminator: ++counter % 4 == 0 ? "\n" : " ")
+				lineString += ascii[counter*4..<(counter*4 + 4)]
+                print($0.toHexWith0x(), terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
+				if counter % 4 == 0 {
+					print("\(lineString)")
+					lineString = ""
+				}
             })
-            if counter % 4 != 0 { print("") }
+            if counter % 4 != 0 {
+				// The last line didn't have 4 full hex values on it, spit out the last bit
+				// A 32-bit number printed in hex with the leading 0x is 10 characters long
+				// plus the space that precedes it, making 11 characters per missing word
+				let numMissing = 4 - counter%4
+				let paddingString = String(count: 11*numMissing, repeatedValue: " " as Character) + "\t\t"
+				print("\(paddingString)\(lineString)")
+			}
         case .AutoDump:
             // Toggle current auto-dump setting
             self.autodump = !self.autodump
@@ -266,29 +281,29 @@ class REPL {
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
             print("All interpreter commands:")
-            print("\tautoexecute/ae: toggle auto-execution of entered instructions.")
-            print("\texecute/exec/ex/e: execute all instructions previously paused by disabling auto-execution.")
-            print("\ttrace/t: print every instruction as it is executed.")
-            print("\tverbose/v: toggle verbose parsing of instructions.")
-            print("\tregisterdump/regdump/registers/regs/rd: print the values of all registers.")
-            print("\tregister/reg/r [register]: print the value of a register.")
-            print("\tautodump/ad: toggle auto-dump of registers after execution of every instruction.")
-            print("\tlabeldump/labels/ld: print all labels as well as their locations.")
-            print("\tlabel/l [label]: print the location of a label.")
-            print("\tinstructions/insts/instructiondump/instdump/id: print all instructions as well as their locations.")
-            print("\tinstruction/inst/i [location]: print the instruction at a location.")
-            print("\tmemory/mem/m [location|register] [count]: print a number of words beginning at a location in memory.")
-            print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
-            print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
-            print("\toctal/oct: set register dumps to print out values in octal (base 8).")
-            print("\tbinary/bin: set register dumps to print out values in binary (base 2).")
-            print("\tstatus/settings/s: display current interpreter settings.")
-            print("\thelp/h/?: display the help message.")
+            print("\tautoexecute|ae: toggle auto-execution of entered instructions.")
+            print("\texecute|exec|ex|e: execute all instructions previously paused by disabling auto-execution.")
+            print("\ttrace|t: print every instruction as it is executed.")
+            print("\tverbose|v: toggle verbose parsing of instructions.")
+            print("\tregisterdump|regdump|registers|regs|rd: print the values of all registers.")
+            print("\tregister|reg|r [register]: print the value of a register.")
+            print("\tautodump|ad: toggle auto-dump of registers after execution of every instruction.")
+            print("\tlabeldump|labels|ld: print all labels as well as their locations.")
+            print("\tlabel|l [label]: print the location of a label.")
+            print("\tinstructions|insts|instructiondump|instdump|id: print all instructions as well as their locations.")
+            print("\tinstruction|inst|i [location]: print the instruction at a location.")
+            print("\tmemory|mem|m [location|register] [count]: print a number of words beginning at a location in memory.")
+            print("\thexadecimal|hex: set register dumps to print out values in hexadecimal (base 16).")
+            print("\tdecimal|dec: set register dumps to print out values in decimal (base 10).")
+            print("\toctal|oct: set register dumps to print out values in octal (base 8).")
+            print("\tbinary|bin: set register dumps to print out values in binary (base 2).")
+            print("\tstatus|settings|s: display current interpreter settings.")
+            print("\thelp|h|?: display the help message.")
             print("\tabout: display information about this software.")
-            print("\tcommands/cmds/c: display this message.")
-            print("\tnoop/n: do nothing.")
-            print("\tfile/f/use/usefile/openfile/open/o [file]: open a file to read instructions from.")
-            print("\texit/quit/q: exit the interpreter.")
+            print("\tcommands|cmds|c: display this message.")
+            print("\tnoop|n: do nothing.")
+            print("\tfile|f|use|usefile|openfile|open|o [file]: open a file to read instructions from (auto-execution will be paused).")
+            print("\texit|quit|q: exit the interpreter.")
         case .About:
             // Display information about the interpreter
             print("MIPSwift v\(mipswiftVersion): a MIPS interpreter written in Swift by Hunter Knepshield.")
