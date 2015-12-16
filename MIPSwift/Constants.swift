@@ -12,8 +12,8 @@ import Foundation
 let mipswiftVersion = 1.0
 let commandLineOptions = "[-d] [-noae] [-f file]"
 let beginningPc: Int32 = 0x00400000
-let beginningMem: Int32 = 0x10000000
-let beginningStack: Int32 = 0x7FFFEB38
+let beginningData: Int32 = 0x10000000
+let beginningSp: Int32 = 0x7FFFEB38
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
 
 // Constants to aid with parsing logic
@@ -24,6 +24,7 @@ let validRegisters = ["$zero", "$0", "$at", "$1", "$v0", "$2", "$v1", "$3", "$a0
 // Register objects that are used often and/or inaccessible to the user
 let zero = Register("$zero", writing: true, user: false)!
 let ra = Register("$ra", writing: true, user: false)!
+let sp = Register("$sp", writing: true, user: false)!
 let pc = Register("pc", writing: true, user: false)!
 let hi = Register("hi", writing: true, user: false)!
 let lo = Register("lo", writing: true, user: false)!

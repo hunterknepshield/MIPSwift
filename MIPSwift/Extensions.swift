@@ -161,6 +161,9 @@ extension Int32 {
     
     // Just a convenience function to reduce character counts
     func toHexWith0x() -> String {
+        if self == 0 {
+            return "0x00000000"
+        }
         return self.format(PrintOption.HexWith0x.rawValue)
     }
 }
@@ -188,6 +191,33 @@ extension Int32 {
     // Quick way to convert to an unsigned 64-bit representation
     func unsigned64() -> UInt64 {
         return UInt64(bitPattern: self.signed64())
+    }
+    
+    // Quick accessors for any byte of self as unsigned an 8-bit integer
+    func unsignedLowest8() -> UInt8 {
+        return UInt8(truncatingBitPattern: self.unsigned())
+    }
+    
+    func unsignedLower8() -> UInt8 {
+        return UInt8(truncatingBitPattern: self.unsigned() >> 8)
+    }
+    
+    func unsignedHigher8() -> UInt8 {
+        return UInt8(truncatingBitPattern: self.unsigned() >> 16)
+    }
+    
+    func unsignedHighest8() -> UInt8 {
+        return UInt8(truncatingBitPattern: self.unsigned() >> 24)
+    }
+    
+    // Quick accessor for all bytes of self as unsigned 8-bit integers
+    func toBytes() -> (highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8) {
+        return (self.unsignedHighest8(), self.unsignedHigher8(), self.unsignedLower8(), self.unsignedLowest8())
+    }
+    
+    // New constructor to create a 32-bit signed integer from 4 unsigned 8-bit integers
+    init(highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8) {
+        self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
     }
 }
 

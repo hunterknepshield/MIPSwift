@@ -25,6 +25,7 @@ enum Command {
     case Label(String)
     case InstructionDump
     case Instruction(Int32)
+    case Memory(Either<Int32, Register>, Int)
     case Status
     case Help
     case About
@@ -43,7 +44,7 @@ enum Command {
         let strippedString = string[1..<string.characters.count] // Remove the commandDelimiter character
         let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
         let command = commandAndArgs[0]
-        let args = commandAndArgs[1..<commandAndArgs.count]
+        let args = Array(commandAndArgs[1..<commandAndArgs.count])
         switch(command) {
         case "autoexecute", "ae":
             self = .AutoExecute
@@ -56,11 +57,11 @@ enum Command {
         case "labels", "labeldump", "ld":
             self = .LabelDump
         case "label", "l":
-            if commandAndArgs.count == 1 {
+            if args.count == 0 {
                 self = .Invalid("No label name supplied.")
             } else {
                 if validLabelRegex.test(args[0]) {
-                    self = .Label(args[0])
+                    self = .Label(args.first!)
                 } else {
                     self = .Invalid("Invalid label: \(args[0])")
                 }
@@ -68,11 +69,13 @@ enum Command {
         case "instructions", "insts", "instructiondump", "instdump", "id":
             self = .InstructionDump
         case "instruction", "inst", "i":
-            if commandAndArgs.count == 1 {
+            if args.count == 0 {
                 self = .Invalid("No location supplied.")
             } else {
+                // To read a hex value
                 let scanner = NSScanner(string: args[0])
                 let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+                defer { pointer.dealloc(1) } // Called when execution leaves the current scope
                 if scanner.scanHexInt(pointer) {
                     if pointer.memory != 0 && pointer.memory < UINT32_MAX {
                         // Safe to make an Int32 from this value
@@ -84,12 +87,64 @@ enum Command {
                 } else {
                     self = .Invalid("Invalid location: \(args[0])")
                 }
-                pointer.dealloc(1)
+            }
+        case "memory", "mem", "m":
+            if args.count == 0 {
+                self = .Invalid("No location supplied.")
+            } else {
+                if args[0].containsString(registerDelimiter) {
+                    guard let reg = Register(args[0], writing: false, user: false) else {
+                        self = .Invalid("Invalid memory location: \(args[0])")
+                        break
+                    }
+                    let numBytes: Int
+                    if args.count > 1 {
+                        // User also specified a number of bytes to read
+                        guard let numBytes = Int(args[1]) where numBytes > 0 else {
+                            self = .Invalid("Invalid number of bytes specified: \(args[1])")
+                            break
+                        }
+                    } else {
+                        numBytes = 4
+                    }
+                    self = .Memory(.Right(reg), numBytes)
+                } else {
+                    // To read a hex value
+                    let scanner = NSScanner(string: args[0])
+                    let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+                    defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+                    if scanner.scanHexInt(pointer) {
+                        if pointer.memory < UINT32_MAX {
+                            // Safe to make an Int32 from this value
+                            let address = pointer.memory.signed()
+                            if address % 4 != 0 {
+                                self = .Invalid("Unaligned memory address: \(address.toHexWith0x())")
+                            } else {
+                                let numBytes: Int
+                                if args.count > 1 {
+                                    // User also specified a number of bytes to read
+                                    guard let numBytes = Int(args[1]) where numBytes > 0 else {
+                                        self = .Invalid("Invalid number of bytes specified: \(args[1])")
+                                        break
+                                    }
+                                } else {
+                                    numBytes = 4
+                                }
+                                self = .Memory(.Left(address), numBytes)
+                            }
+                        } else {
+                            // Unsafe to make an Int32 from this value, just complain
+                            self = .Invalid("Invalid location: \(args[0])")
+                        }
+                    } else {
+                        self = .Invalid("Invalid location: \(args[0])")
+                    }
+                }
             }
         case "registerdump", "regdump", "registers", "regs", "rd":
             self = .RegisterDump
         case "register", "reg", "r":
-            if commandAndArgs.count == 1 {
+            if args.count == 0 {
                 self = .Invalid("No register supplied.")
             } else {
                 if validRegisters.contains(args[0]) {

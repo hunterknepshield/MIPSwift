@@ -382,6 +382,10 @@ struct Instruction: CustomStringConvertible {
             guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
                 return nil
             }
+            if !(0..<32 ~= src2.value) {
+                print("Invalid shift factor: \(src2.value)")
+                return nil
+            }
             self.type = .ALUI(.Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() })), dest, src1, src2)
             self.pcIncrement = 4
         // Memory operations
@@ -462,6 +466,16 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .ALUI(.Left(+), dest, zero, src)
             self.pcIncrement = 8
+        case "lui":
+            if argCount != 2 {
+                print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+                return nil
+            }
+            guard let dest = Register(args[1], writing: true), src = Immediate(args[2]) else {
+                return nil
+            }
+            self.type = .ALUI(.Left({ return $1 << 16 }), dest, zero, src)
+            self.pcIncrement = 4
         case "move":
             if argCount != 2 {
                 print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")

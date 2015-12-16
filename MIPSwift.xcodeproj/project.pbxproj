@@ -164,6 +164,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A5AE3931C1D163C005C01DB /* Either.swift in Sources */,
 				5A0F630D1C19530200DC4372 /* Instruction.swift in Sources */,
 				5AD2A2E51C1D4DF5002C3EDD /* SyscallCode.swift in Sources */,
 				5AA61BC11C19529B007F1409 /* RegisterFile.swift in Sources */,
@@ -173,7 +174,6 @@
 				5A7D46341C196CD200615B1D /* Constants.swift in Sources */,
 				5A0F63111C1954E900DC4372 /* REPL.swift in Sources */,
 				5AE8A8A61C1A2022002F07DC /* Register.swift in Sources */,
-				5A5AE3931C1D163C005C01DB /* Either.swift in Sources */,
 				5A0F630F1C19544C00DC4372 /* Command.swift in Sources */,
 				5A58C3D71C1A2D8200B6520C /* OptionsObjects.swift in Sources */,
 				5AAE644F1C1B651C00340245 /* Regex.swift in Sources */,

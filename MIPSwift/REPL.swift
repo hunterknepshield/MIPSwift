@@ -24,14 +24,17 @@ class REPL {
     
     init(options: REPLOptions) {
         print("Initializing REPL...", terminator: " ")
-        self.registers.set(pc.name, currentPc)
         self.verbose = options.verbose
         self.autodump = options.autodump
         self.autoexecute = options.autoexecute
-        self.trace = options.trace        
+        self.trace = options.trace
         self.registers.printOption = options.printSetting
         self.inputSource = options.inputSource
         self.usingFile = options.usingFile
+        
+        // Set initial register values
+        self.registers.set(pc.name, currentPc)
+        self.registers.set(sp.name, beginningSp)
     }
     
     func run() {
@@ -207,6 +210,33 @@ class REPL {
                 break
             }
             print("\t\(instruction)")
+        case .Memory(let loc, let numWords):
+            let location: Int32
+            switch(loc) {
+            case .Left(let int):
+                location = int
+            case .Right(let reg):
+                location = self.registers.get(reg.name)
+            }
+            // Print numBytes of memory starting at location
+            var words = [Int32]()
+            for i in 0..<numWords {
+                let address = location + 32*i
+                let highest = self.memory[address] ?? 0
+                let higher = self.memory[address + 8] ?? 0
+                let lower = self.memory[address + 16] ?? 0
+                let lowest = self.memory[address + 24] ?? 0
+                words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
+            }
+            var counter = 0
+            words.forEach({
+                if counter % 4 == 0 {
+                    // Make new lines every 16 bytes (4 sets of 32 bits)
+                    print("[\((location + counter*4).toHexWith0x())]", terminator: "\t")
+                }
+                print($0.toHexWith0x(), terminator: ++counter % 4 == 0 ? "\n" : " ")
+            })
+            if counter % 4 != 0 { print("") }
         case .AutoDump:
             // Toggle current auto-dump setting
             self.autodump = !self.autodump
@@ -247,6 +277,7 @@ class REPL {
             print("\tlabel/l [label]: print the location of a label.")
             print("\tinstructions/insts/instructiondump/instdump/id: print all instructions as well as their locations.")
             print("\tinstruction/inst/i [location]: print the instruction at a location.")
+            print("\tmemory/mem/m [location] [count]: print a number of words beginning at a location in memory.")
             print("\thexadecimal/hex: set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal/dec: set register dumps to print out values in decimal (base 10).")
             print("\toctal/oct: set register dumps to print out values in octal (base 8).")
@@ -344,28 +375,32 @@ class REPL {
             }
         case let .Memory(storing, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
-            let address = addrRegValue + offset.signExtended
+            let address = addrRegValue + offset.signExtended*8 // Immediate is offset in bytes
+            if address % Int32(1 << size) != 0 {
+                print("Unaligned memory reference: \(address.toHexWith0x())")
+                // TODO disallow
+            }
             if storing {
                 // Storing the value in memReg to memory
-                let valueToStore32 = self.registers.get(memReg.name)
+                let valueToStore = self.registers.get(memReg.name)
                 switch(size) {
                 case 0:
                     // Storing a single byte (from low-order bits)
-                    let valueToStore8 = Int8(valueToStore32 & 0xFF)
-                    print("TODO store \(valueToStore8)")
+                    let lowest = valueToStore.unsignedLowest8()
+                    self.memory[address] = lowest
                 case 1:
                     // Storing a half-word (from low-order bits)
-                    if address % 2 != 0 {
-                        print("Unaligned memory reference: \(address.toHexWith0x())")
-                    }
-                    let valueToStore16 = Int16(valueToStore32 & 0xFFFF)
-                    print("TODO store \(valueToStore16)")
+                    let lower = valueToStore.unsignedLower8()
+                    let lowest = valueToStore.unsignedLowest8()
+                    self.memory[address] = lower
+                    self.memory[address + 8] = lowest
                 case 2:
                     // Storing a word
-                    if address % 4 != 0 {
-                        print("Unaligned memory reference: \(address.toHexWith0x())")
-                    }
-                    print("TODO store \(valueToStore32)")
+                    let (highest, higher, lower, lowest) = valueToStore.toBytes()
+                    self.memory[address] = highest
+                    self.memory[address + 8] = higher
+                    self.memory[address + 16] = lower
+                    self.memory[address + 24] = lowest
                 default:
                     // Never reached
                     fatalError("Invalid size of store word: \(size)")
@@ -376,25 +411,17 @@ class REPL {
                 switch(size) {
                 case 0:
                     // Loading a single byte
-                    print("TODO load")
-                    loadedValue = Int32(0)
-                    break
+                    loadedValue = Int32(highest: 0, higher: 0, lower: 0, lowest: self.memory[address] ?? 0)
                 case 1:
                     // Loading a half-word
-                    if address % 2 != 0 {
-                        print("Unaligned memory reference: \(address.toHexWith0x())")
-                    }
-                    print("TODO load")
-                    loadedValue = Int32(0)
-                    break
+                    loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 8] ?? 0)
                 case 2:
                     // Loading a word
-                    if address % 4 != 0 {
-                        print("Unaligned memory reference: \(address.toHexWith0x())")
-                    }
-                    print("TODO load")
-                    loadedValue = Int32(0)
-                    break
+                    let highest = self.memory[address] ?? 0
+                    let higher = self.memory[address + 8] ?? 0
+                    let lower = self.memory[address + 16] ?? 0
+                    let lowest = self.memory[address + 24] ?? 0
+                    loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest)
                 default:
                     // Never reached
                     fatalError("Invalid size of load word: \(size)")
