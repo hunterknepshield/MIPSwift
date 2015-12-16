@@ -11,43 +11,132 @@
 
 import Foundation
 
-// Typealiases for functions stored within InstructionTypes
-typealias Operation32 = (Int32, Int32) -> Int32 // 2 operands, 1 result
-typealias Operation64 = (Int32, Int32) -> (Int32, Int32) // 2 operands, 2 results; technically 1 Int64 would also suffice, but this reduces parsing (e.g. operations that store results into hi and lo)
-typealias OperationBool = (Int32, Int32) -> Bool // 2 operands, 1 boolean result
+// MARK: Typealiases
+/// 2 operands, 1 result. Most typical operation type.
+typealias Operation32 = (Int32, Int32) -> Int32
+/// 2 operands, 2 results. Generally used for instructions that store into hi
+/// and lo. The value to be stored in hi is the first value in the tuple.
+///
+/// Technically, the result could be a single Int64, but most instructions just
+/// end up splitting that back into 2 32-bit integers anyways; this format
+/// reduces the parsing needed at execution time and makes division/remainder
+/// instructions considerably simpler.
+typealias Operation64 = (Int32, Int32) -> (Int32, Int32)
+/// 2 operands, 1 boolean result. Generally used for branch instructions.
+typealias OperationBool = (Int32, Int32) -> Bool
 
-// Representations of each type of MIPS instruction
+// MARK: InstructionType
+/// Representations of each type of MIPS instruction. Each instruction type has
+/// all appropriate associated values to complete the instruction.
 enum InstructionType {
-    // Typical Instruction types
-    case ALUR(Either<Operation32, (Operation64, Bool)>, Register?, Register, Register) // Destination register may or may not be used based on which type the operation is
+	/// An ALU operation that uses 2 source registers. The destination register
+	/// may or may not be used based on which type the operation is.
+	///
+	/// Associated values:
+	/// - `Either<Operation32, (Operation64, Bool)>`: This instruction may
+	/// generate either a 32-bit result or a 64-bit result depending on the
+	/// wrapped type.
+	/// - `Register?`: The destination register of the instruction; guaranteed to
+	/// be non-nil if the Either type wraps an Operation32. If the Either type
+	/// wraps an Operation64 and Bool and this is non-nil, then the Bool is used
+	/// to determine if the result from the 'hi' portion of the result is used.
+	/// - `Register`: The first source register for the instruction.
+	///	- `Register`: The second source register for the instruction.
+    case ALUR(Either<Operation32, (Operation64, Bool)>, Register?, Register, Register)
+	/// An ALU instruction that uses a register and an immediate value as its
+	/// sources.
+	///
+	/// Associated values:
+	/// - `Either<Operation32, (Operation64, Bool)>`: This instruction may
+	/// generate either a 32-bit result or a 64-bit result depending on the
+	/// wrapped type.
+	/// - `Register`: The destination register of the instruction. If the Either
+	/// type wraps an Operation64 and Bool, then the Bool is used to determine
+	/// if the result from the 'hi' portion of the result is used.
+	///	- `Register`: The first source for the instruction.
+	///	- `Immediate`: The second source for the instruction.
     case ALUI(Either<Operation32, (Operation64, Bool)>, Register, Register, Immediate)
+	/// A memory instruction that calculates an effective address in memory and
+	/// loads or stores data from that address into or from a register.
+	///
+	/// Associated values:
+	/// - `Bool`: Used to determine if this instruction performs a store
+	/// operation or not.
+	/// - `Int`: Used to determine the number of bytes to load or store. This
+	/// value is a power of 2. 0 = byte, 1 = half-word, 2 = word.
+	/// - `Register`: The register that will be stored from or loaded into.
+	/// - `Immediate`: The offset for calculation of the effective address.
+	/// - `Register`: The register for calculation of the effective address.
     case Memory(Bool, Int, Register, Immediate, Register)
-    case Jump(Bool, Either<Register, String>) // Technically, J-type instructions store an integer value that's the offset from the current program counter
+	/// An unconditional jump instruction. Technically, J-type instructions
+	/// store a 26-bit integer offset from the current program counter.
+	///
+	/// Associated values:
+	/// - `Bool`: Used to determine if this instruction links the current program
+	/// counter into $ra or not.
+	/// - `Eiher<Register, String>`: The destination for the jump; may be the
+	/// value of a register or the location of a label.
+    case Jump(Bool, Either<Register, String>)
+	/// A conditional branch instruction.
+	///
+	/// Associated values:
+	/// - `OperationBool`: Used to determine if the branch is actually taken or
+	/// not.
+	/// - `Bool`: Used to determine if this instruction links the current program
+	/// counter into $ra or not.
+	/// - `Register`: The first source for the instruction.
+	/// - `Register`: The second source for the instruction.
+	/// - `String`: The destination label to jump to if this branch is taken.
     case Branch(OperationBool, Bool, Register, Register, String)
-    // Special Instruction types
-    case Syscall // System call; e.g. reading input, printing, etc.
-    case Directive(DotDirective, [String]) // Dot directive with arugments; e.g. .data, .text, etc.
-    case NonExecutable // This line only contains labels and/or comments    
+	/// A system call. This instruction type is used to allow the assembly
+	/// program to do system-level things like read input and print.
+	///
+	/// No associated values.
+    case Syscall
+	/// An assembler directive. This is technically not an instruction, but it
+	/// gives the assembler information on how to arrange things within the
+	/// final file, such as global data.
+	///
+	/// Associated values:
+	/// - `DotDirective`: The actual type of directive.
+	/// - `[String]`: The arguments for the directive. Guaranteed to be valid.
+    case Directive(DotDirective, [String])
+	/// A non-executable instruction. This is generated whenever a line contains
+	/// only labels and/or comments.
+	///
+	/// No associated values.
+    case NonExecutable
 }
 
+// MARK: Instruction
+/// Representation of a MIPS instruction.
 struct Instruction: CustomStringConvertible {
+	/// The exact string that was passed in during initialization, unmodified.
     let rawString: String
+	/// The location of this instruction in memory.
     let location: Int32
+	/// The amount that this instruction increments the program counter. All
+	/// simple instructions increment the program counter by just 4; pseudo
+	/// instructions may increment by more than that.
     let pcIncrement: Int32
+	/// The parsed arguments of this instruction, omitting labels and comments.
     var arguments = [String]()
+	/// The parsed labels of this instruction.
     var labels = [String]()
+	/// The parsed comment of this instruction, if there was one.
     var comment: String?
+	/// The final parsed representation of the instruction.
     let type: InstructionType
+	/// The 'pretty' formatting of this instruction's arguments.
     var instructionString: String {
-        // Labels and comments removed; syntax possibly reformatted
         get {
             if self.arguments.count > 0 {
                 var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
                 if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
                     // Add string literal delimiters before and after arguments; only for .ascii/.asciiz
                     string += stringLiteralDelimiter + self.arguments[1].toStringWithLiteralEscapes() + stringLiteralDelimiter
-                } else if case .Memory(_, _, _, _, _) = self.type {
-                    // Special formatting of memory operation, e.g. lw  $s0, 0($sp)
+                } else if case .Memory(_) = self.type {
+                    // Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
                     string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
                 } else {
                     var counter = 0
@@ -59,11 +148,11 @@ struct Instruction: CustomStringConvertible {
             }
         }
     }
+	/// The 'pretty' formatting of this instruction's arguments, with any labels
+	/// preceeding it, and any comments following it.
     var completeString: String {
-        // Labels and comments added back in around the instruction string
         get {
             var string = ""
-            // Labels come first
             var counter = 0
             self.labels.forEach({ string += "\($0):" + (++counter < self.labels.count ? "" : "\t") })
             string += self.instructionString
@@ -73,8 +162,17 @@ struct Instruction: CustomStringConvertible {
             return string
         }
     }
-    var description: String { get { return "\(self.location.toHexWith0x()):\t\(self.completeString)" } }
-    
+    var description: String { get { return "\(self.location.toHexWith0x()):\t\(self.instructionString)" } }
+	
+	/// Initialize an instruction from a raw input string. Will fail if the
+	/// string would generate an invalid instruction.
+	///
+	/// - Parameters:
+	///		- string: The raw string to be parsed.
+	///		- location: The location that this instruction will be stored at in
+	///			memory.
+	///		- verbose: Determines if argument parsing will print extra
+	///			information or not.
     init?(string: String, location: Int32, verbose: Bool) {
         self.rawString = string
         self.location = location
@@ -142,6 +240,7 @@ struct Instruction: CustomStringConvertible {
         
         let argCount = args.count - 1 // Don't count the actual instruction
         if args[0][0] == directiveDelimiter {
+			// MARK: Directive parsing
             // Requires a significant amount of additional parsing to make sure arguments are in order
             guard let directive = DotDirective(rawValue: args[0]) else {
                 print("Invalid directive: \(args[0])")
@@ -197,7 +296,7 @@ struct Instruction: CustomStringConvertible {
                         print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
                         return nil
                     }
-                    guard let escapedArgument = try? rawArgument.toStringWithEscapeSequences() else {
+                    guard let escapedArgument = try? rawArgument.toEscapedString() else {
                         return nil // Couldn't escape this string
                     }
                     self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding)) // No null terminator
@@ -225,7 +324,7 @@ struct Instruction: CustomStringConvertible {
                         print("Invalid data after string literal: \(self.rawString[stringEndRange.endIndex..<self.rawString.endIndex])")
                         return nil
                     }
-                    guard let escapedArgument = try? rawArgument.toStringWithEscapeSequences() else {
+                    guard let escapedArgument = try? rawArgument.toEscapedString() else {
                         return nil // Couldn't escape this string
                     }
                     self.pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + 1) // Include null terminator
@@ -290,7 +389,7 @@ struct Instruction: CustomStringConvertible {
         case "syscall":
             self.type = .Syscall
             self.pcIncrement = 4
-        // ALU-R operations
+        // MARK: ALU-R instructions
         case "add", "addu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
@@ -343,7 +442,7 @@ struct Instruction: CustomStringConvertible {
 			// The register's value is truncated down to the lowest 5 bits to ensure a valid shift range (in real MIPS too)
 			self.type = .ALUR(.Left(args[0] == "sllv" ? { return $0 << ($1 & 0x1F) } : (args[0] == "srav" ? { return $0 >> ($1 & 0x1F)} : { return ($0.unsigned() >> ($1 & 0x1F).unsigned()).signed() })), dest, src1, src2)
             self.pcIncrement = 4
-        // ALU-I operations
+        // MARK: ALU-I instructions
         case "addi", "addiu":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
@@ -390,7 +489,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .ALUI(.Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() })), dest, src1, src2)
             self.pcIncrement = 4
-        // Memory operations
+        // MARK: Memory instructions
         case "lw", "lh", "lb", "sw", "sh", "sb":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
@@ -403,7 +502,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .Memory(storing, size, memReg, offset, addrReg)
             self.pcIncrement = 4
-        // Jump instructions
+        // MARK: Jump instructions
         case "j", "jal":
             if argCount != 1 {
                 print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
@@ -421,7 +520,7 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .Jump(args[0] == "jalr", .Left(dest))
             self.pcIncrement = 4
-        // Branch instructions
+        // MARK: Branch instructions
         case "beq", "bne":
             if argCount != 3 {
                 print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
@@ -457,8 +556,9 @@ struct Instruction: CustomStringConvertible {
             }
             self.type = .Branch(op, link, src1, zero, args[2])
             self.pcIncrement = 4
-        // More complex instructions, mostly pseudo-instructions
+        // MARK: More complex instructions
         case "li":
+			// Pseudo instruction that gets converted to lui $at [imm&0xFFFF0000] and ori [dest] $at [imm&0xFFFF]
             if argCount != 2 {
                 print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
                 return nil

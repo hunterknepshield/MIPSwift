@@ -8,17 +8,21 @@
 
 import Foundation
 
-// Representation of an immediate value
+/// Representation of an immediate value.
 struct Immediate {
-    var value: Int16 // Limited to 16 bits by MIPS instruciton structure itself
-    var signExtended: Int32 { get { return Int32(value) } } // To perform operations
+	/// Limited to 16 bits by the structure of MIPS instructions themselves.
+    var value: Int16
+	/// The 32-bit value with which operations can be performed.
+    var signExtended: Int32 { get { return Int32(value) } }
     
-    // Initialize an immediate value from an integer
+    /// Initialize an immediate value from an integer.
     init(value: Int16) {
         self.value = value
     }
     
-    // Attempt to initialize an immediate value from a string; may fail
+    /// Attempt to initialize an immediate value from a string. May fail if the
+	/// string is not a valid number that fits in a signed 16-bit
+	/// representation.
     init?(_ string: String) {
         guard let immValue = Int16(string) else {
             print("Unable to create immediate value from string: \(string)")

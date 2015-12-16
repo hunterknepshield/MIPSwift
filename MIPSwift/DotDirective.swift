@@ -11,15 +11,26 @@
 
 import Foundation
 
+/// Representation of an assembler directive.
 enum DotDirective: String {
-    case Text = ".text" // Change to text segment
-    case Data = ".data" // Change to data segment
-    case Global = ".globl" // Declare a global label
-    case Align = ".align" // Align to a 2^n-byte boundary
-    case Space = ".space" // Allocate n bytes of space
-    case Word = ".word" // Store four byte values with initial values supplied
-    case Half = ".half" // Store two byte values with initial values supplied
-    case Byte = ".byte" // Store single bytes with initial values supplied
-    case Ascii = ".ascii" // Non-null-terminated string
-    case Asciiz = ".asciiz" // Null-terminated string
+	/// Change to the text segment.
+    case Text = ".text"
+	/// Change to the data segment.
+    case Data = ".data"
+	/// Declare a global label.
+    case Global = ".globl"
+	/// Align to a 2^n-byte boundary.
+    case Align = ".align"
+	/// Allocate n bytes of space
+    case Space = ".space"
+	/// Store 4-byte values with initial values supplied
+    case Word = ".word"
+	/// Store 2-byte values with initial values supplied
+    case Half = ".half"
+	/// Store 1-byte values with initial values supplied
+    case Byte = ".byte"
+	/// Store a non-null-terminated string
+    case Ascii = ".ascii"
+	/// Store a null-terminated string
+    case Asciiz = ".asciiz"
 }

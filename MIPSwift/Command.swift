@@ -8,34 +8,81 @@
 
 import Foundation
 
-// Representation of an interpreter command
+/// Representation of an interpreter command.
 enum Command {
+	/// Toggle auto-execution of instructions. If auto-execute was just enabled
+	/// by this command, call resumeExecution() to ensure no instructions are
+	/// skipped.
     case AutoExecute
+	/// Execute all previously stored and as-of-yet unexecuted instructions.
     case Execute
+	/// Toggle printing of every unstruction as it is executed.
     case Trace
+	/// Toggle verbose parsing of instructions.
     case Verbose
+	/// Print the current values of all registers.
     case RegisterDump
+	/// Print the current value of a register.
+	///
+	/// Associated values:
+	/// - `String`: The name of the register whose value will be printed.
     case SingleRegister(String)
+	/// Toggle auto-dump of registers after execution of every instruction.
     case AutoDump
-    case Hex
-    case Decimal
-    case Octal
-    case Binary
+	/// Print all labels as well as their locations.
     case LabelDump
+	/// Print the location of a label.
+	///
+	/// Associated values:
+	/// - `String`: The name of the label whose information will be printed.
     case SingleLabel(String)
+	/// Print all instructions as well as their locations.
     case InstructionDump
+	/// Print the instruction at a location.
+	///
+	/// Associated values:
+	/// `Int32`: A location in memory.
     case SingleInstruction(Int32)
+	/// Print a number of words beginning at a location in memory.
+	///
+	/// Associated values:
+	/// - `Either<Int32, Register>`: The location or register whose value at
+	/// which memory values will be printed.
+	/// - `Int`: The number of words to print.
     case Memory(Either<Int32, Register>, Int)
+	/// Set register dumps to print out values in hexadecimal.
+	case Hex
+	/// Set register dumps to print out values in decimal.
+	case Decimal
+	/// Set register dumps to print out values in octal.
+	case Octal
+	/// Set register dumps to print out values in binary.
+	case Binary
+	/// Display current interpreter settings.
     case Status
+	/// Display the help message.
     case Help
+	/// Display the about message.
     case About
+	/// Display the commands message.
     case Commands
+	/// Do nothing
     case NoOp
+	/// Open a file to read instructions from, pausing auto-execution first.
+	///
+	/// Associated values:
+	/// `String`: The file name to be opened.
     case UseFile(String)
+	/// Exit the interpreter.
     case Exit
+	/// An invalid command.
+	///
+	/// Associated values:
+	/// `String`: The reason that this command was invalid.
     case Invalid(String)
     
-    // Construct a Command from a given string; never fails, but may be .Invalid
+    /// Construct a Command from an input string. Never fails, but may be of 
+	/// type .Invalid.
     init(_ string: String) {
         if string == "" {
             self = .NoOp

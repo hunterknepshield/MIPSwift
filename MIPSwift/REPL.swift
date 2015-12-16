@@ -8,20 +8,36 @@
 
 import Foundation
 
+/// A read-eval-print loop for interpreting MIPS assembly instructions.
 class REPL {
+	/// The source from which input is currently being read.
     var inputSource: NSFileHandle
+	/// Used to determine whether or not input is being read from a file or
+	/// standard input.
     var usingFile: Bool
+	/// The register file in its current state.
     var registers = RegisterFile()
-    var currentPc = beginningPc // To avoid constantly getting and setting self.registers.pc
-    var pausedPc: Int32? // Keep track of where execution was last paused
-    var labelsToLocations = [String : Int32]() // Maps labels to locations
-    var locationsToInstructions = [Int32 : Instruction]() // Maps locations to instructions
-    var memory = [Int32 : UInt8]() // Maps locations to memory
+	/// The current value of the program counter. Used to avoid constantly
+	/// getting and setting self.registers.pc.
+    var currentPc = beginningPc
+	/// Keeps track of where execution was last paused.
+    var pausedPc: Int32?
+	/// Maps labels to locations in memory.
+    var labelsToLocations = [String : Int32]()
+	/// Maps locations in memory to instructions.
+    var locationsToInstructions = [Int32 : Instruction]()
+	/// Maps locations in memory to individual bytes.
+    var memory = [Int32 : UInt8]()
+	/// Current setting for verbose instruction parsing.
     var verbose = false
+	/// Current setting for auto-dump of registers after instruction execution.
     var autodump = false
+	/// Current setting for auto-execution of instructions.
     var autoexecute = true
+	/// Current setting for printing of instructions during execution.
     var trace = false
-    
+	
+	/// Initialize a REPL with supplied settings.
     init(options: REPLOptions) {
         print("Initializing REPL...", terminator: " ")
         self.verbose = options.verbose
@@ -36,8 +52,10 @@ class REPL {
         self.registers.set(pc.name, currentPc)
         self.registers.set(sp.name, beginningSp)
     }
-    
-    func run() {
+	
+	/// Begin reading input. This function will continue running until either
+	/// an error occurs within Swift itself, or the :exit command is used.
+    @noreturn func run() {
         if self.usingFile {
             print("Reading file.")
         } else {
@@ -108,7 +126,13 @@ class REPL {
             })
         }
     }
-    
+	
+	/// Read available input from the current input source. If it is a file, the
+	/// entire file will be read at once (because NSFileHandles are poorly
+	/// implemented). Because of this, an array of strings is returned. If
+	/// reading from standard input, the array is guaranteed to have count 1.
+	///
+	/// - Returns: All input read, separated out line by line.
     func readInput() -> [String] {
         let inputData = self.inputSource.availableData
         if inputData.length == 0 && self.usingFile {
@@ -131,7 +155,9 @@ class REPL {
         returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : ":\(inputString)" }) // If any strings contain non-ASCII characters, make them invalid commands
         return returnedArray
     }
-    
+	
+	/// Resume execution from the last executed instruction until it catches up
+	/// and needs new input.
     func resumeExecution() {
         print("Resuming execution...")
         // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstructionLocation
@@ -151,7 +177,8 @@ class REPL {
             self.pausedPc = self.currentPc
         }
     }
-    
+	
+	/// Execute a parsed interpreter command.
     func executeCommand(command: Command) {
         switch(command) {
         case .AutoExecute:
@@ -283,10 +310,10 @@ class REPL {
             print("All interpreter commands:")
             print("\tautoexecute|ae: toggle auto-execution of entered instructions.")
             print("\texecute|exec|ex|e: execute all instructions previously paused by disabling auto-execution.")
-            print("\ttrace|t: print every instruction as it is executed.")
+            print("\ttrace|t: toggle printing of every instruction as it is executed.")
             print("\tverbose|v: toggle verbose parsing of instructions.")
-            print("\tregisterdump|regdump|registers|regs|rd: print the values of all registers.")
-            print("\tregister|reg|r [register]: print the value of a register.")
+            print("\tregisterdump|regdump|registers|regs|rd: print the current values of all registers.")
+            print("\tregister|reg|r [register]: print the current value of a register.")
             print("\tautodump|ad: toggle auto-dump of registers after execution of every instruction.")
             print("\tlabeldump|labels|ld: print all labels as well as their locations.")
             print("\tlabel|l [label]: print the location of a label.")
@@ -337,7 +364,8 @@ class REPL {
             print("Invalid command: \(invalid)")
         }
     }
-        
+	
+	/// Execute a parsed instruction.
     func executeInstruction(instruction: Instruction) {
         if self.trace {
             print(instruction)
@@ -380,7 +408,7 @@ class REPL {
             case .Right(let (op64, moveFromHi)):
                 // This was a div/rem/mul pseudoinstruction with an immediate
 				// In real MIPS, the immediate is loaded into $at, then the
-				// actual operation is treated the same as the ALU-R type
+				// actual instruction is treated the same as the ALU-R type
 				self.registers.set(at.name, src2.signExtended) // Simulates li	$at, [imm]
                 let (hiValue, loValue) = op64(src1Value, src2.signExtended)
                 self.registers.set(hi.name, hiValue)
@@ -492,7 +520,8 @@ class REPL {
             executeCommand(.RegisterDump)
         }
     }
-    
+	
+	/// Execute a syscall.
     func executeSyscall() {
         guard let syscallCode = SyscallCode(rawValue: self.registers.get("$v0")) else {
             // Don't fatalError() for now, just output
@@ -528,7 +557,8 @@ class REPL {
             print("Syscall code unimplemented: \(self.registers.get("$v0"))")
         }
     }
-    
+	
+	/// Execute an assembler directive.
     func executeDirective(instruction: Instruction) {
         if case let .Directive(directive, args) = instruction.type {
             // Arguments, if any, are guaranteed to be valid here

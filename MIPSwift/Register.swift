@@ -8,15 +8,16 @@
 
 import Foundation
 
-// Representation of a source/destination register
+/// Representation of a MIPS register.
 struct Register {
+	/// The name of the register, e.g. $s0.
     var name: String
     
-    // Attempt to initialize a register from a given name,
-    // fails if the user is attempting to write to a register inaccessible to them
+    /// Attempt to initialize a register from a given name. Fails if the user is
+	/// attempting to write to a register inaccessible to them.
     init?(_ name: String, writing: Bool, user: Bool = true) {
         if user && writing && immutableRegisters.contains(name) {
-            // User is trying to use an immutable register as the destination of an operation
+            // User is trying to use an immutable register as the destination of an instruction
             print("User may not modify register: \(name)")
             return nil
         }

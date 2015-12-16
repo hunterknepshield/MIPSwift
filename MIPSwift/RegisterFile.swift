@@ -8,47 +8,83 @@
 
 import Foundation
 
+/// Representation of a register file inside a CPU.
 class RegisterFile: CustomStringConvertible {
     // User-accessible registers
-    var zero: Int32 { get { return Int32.allZeros } } // $0, immutable
-    var at: Int32 = 0 // $1
-    var v0: Int32 = 0 // $2
-    var v1: Int32 = 0 // $3
-    var a0: Int32 = 0 // $4
-    var a1: Int32 = 0 // $5
-    var a2: Int32 = 0 // $6
-    var a3: Int32 = 0 // $7
-    var t0: Int32 = 0 // $8
-    var t1: Int32 = 0 // $9
-    var t2: Int32 = 0 // $10
-    var t3: Int32 = 0 // $11
-    var t4: Int32 = 0 // $12
-    var t5: Int32 = 0 // $13
-    var t6: Int32 = 0 // $14
-    var t7: Int32 = 0 // $15
-    var s0: Int32 = 0 // $16
-    var s1: Int32 = 0 // $17
-    var s2: Int32 = 0 // $18
-    var s3: Int32 = 0 // $19
-    var s4: Int32 = 0 // $20
-    var s5: Int32 = 0 // $21
-    var s6: Int32 = 0 // $22
-    var s7: Int32 = 0 // $23
-    var t8: Int32 = 0 // $24
-    var t9: Int32 = 0 // $25
-    var k0: Int32 = 0 // $26
-    var k1: Int32 = 0 // $27
-    var gp: Int32 = 0 // $28
-    var sp: Int32 = 0 // $29
-    var fp: Int32 = 0 // $30
-    var ra: Int32 = 0 // $31
+	/// $zero or $0, immutable.
+    var zero: Int32 { get { return Int32.allZeros } }
+	/// $at or $1, assembler temporary value.
+    var at: Int32 = 0
+	/// $v0 or $2, function return value.
+    var v0: Int32 = 0
+	/// $v1 or $3, function return value.
+    var v1: Int32 = 0
+	/// $a0 or $4, function argument value.
+    var a0: Int32 = 0
+	/// $a1 or $5, function argument value.
+    var a1: Int32 = 0
+	/// $a2 or $6, function argument value.
+    var a2: Int32 = 0
+	/// $a3 or $7, function argument value.
+    var a3: Int32 = 0
+	/// $t0 or $8, temporary value.
+    var t0: Int32 = 0
+	/// $t1 or $9, temporary value.
+    var t1: Int32 = 0
+	/// $t2 or $10, temporary value.
+    var t2: Int32 = 0
+	/// $t3 or $11, temporary value.
+    var t3: Int32 = 0
+	/// $t4 or $12, temporary value.
+    var t4: Int32 = 0
+	/// $t5 or $13, temporary value.
+    var t5: Int32 = 0
+	/// $t6 or $14, temporary value.
+    var t6: Int32 = 0
+	/// $t7 or $15, temporary value.
+    var t7: Int32 = 0
+	/// $s0 or $16, saved value.
+    var s0: Int32 = 0
+	/// $s1 or $17, saved value.
+    var s1: Int32 = 0
+	/// $s2 or $18, saved value.
+    var s2: Int32 = 0
+	/// $s3 or $19, saved value.
+    var s3: Int32 = 0
+	/// $s4 or $20, saved value.
+    var s4: Int32 = 0
+	/// $s5 or $21, saved value.
+    var s5: Int32 = 0
+	/// $s6 or $22, saved value.
+    var s6: Int32 = 0
+	/// $s7 or $23, saved value.
+    var s7: Int32 = 0
+	/// $t8 or $24, temporary value.
+    var t8: Int32 = 0
+	/// $t9 or $25, temporary value.
+    var t9: Int32 = 0
+	/// $k0 or $26, kernel reserved.
+    var k0: Int32 = 0
+	/// $k1 or $27, kernel reserved.
+    var k1: Int32 = 0
+	/// $gp or $28, global memory pointer.
+    var gp: Int32 = 0
+	/// $sp or $29, stack pointer.
+    var sp: Int32 = 0
+	/// $fp or $30, stack frame pointer.
+    var fp: Int32 = 0
+	/// $ra or $31, return address pointer.
+    var ra: Int32 = 0
     // User-inaccessible registers
+	/// Program counter
     var pc: Int32 = 0
+	/// Hi
     var hi: Int32 = 0
+	/// Lo
     var lo: Int32 = 0
-    
+	
+	/// Get the value of a given register.
     func get(name: String) -> Int32 {
-        // Get a register's value by its name or alias
         switch(name) {
         case "$zero", "$0":
             return self.zero
@@ -114,19 +150,19 @@ class RegisterFile: CustomStringConvertible {
             return self.fp
         case "$ra", "$31":
             return self.ra
-        case "pc":
+        case "$pc", "pc":
             return self.pc
-        case "hi":
+        case "$hi", "hi":
             return self.hi
-        case "lo":
+        case "$lo", "lo":
             return self.lo
         default:
             fatalError("Invalid register reference: \(name)")
         }
     }
-    
+	
+	/// Set the value of a given register.
     func set(name: String, _ value: Int32) {
-        // Set a register's value by its name or alias
         switch(name) {
         case "$zero", "$0":
             fatalError("Cannot change immutable register $zero")
@@ -192,17 +228,18 @@ class RegisterFile: CustomStringConvertible {
             self.fp = value
         case "$ra", "$31":
             self.ra = value
-        case "pc":
+        case "$pc", "pc":
             self.pc = value
-        case "hi":
+        case "$hi", "hi":
             self.hi = value
-        case "lo":
+        case "$lo", "lo":
             self.lo = value
         default:
             fatalError("Invalid register reference: \(name)")
         }
     }
-    
+	
+	/// The current formatting setting used in self.description.
     var printOption: PrintOption = .Hex
     var description: String {
         get {
