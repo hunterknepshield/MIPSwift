@@ -24,32 +24,29 @@ enum Command {
     case RegisterDump
 	/// Print the current value of a register.
 	///
-	/// Associated values:
-	/// - `String`: The name of the register whose value will be printed.
-    case SingleRegister(String)
+	/// - Parameter register: The name of the register whose value will be printed.
+	case SingleRegister(register: String)
 	/// Toggle auto-dump of registers after execution of every instruction.
     case AutoDump
 	/// Print all labels as well as their locations.
     case LabelDump
 	/// Print the location of a label.
 	///
-	/// Associated values:
-	/// - `String`: The name of the label whose information will be printed.
-    case SingleLabel(String)
+	/// - Parameter label: The name of the label whose information will be printed.
+	case SingleLabel(label: String)
 	/// Print all instructions as well as their locations.
     case InstructionDump
 	/// Print the instruction at a location.
 	///
-	/// Associated values:
-	/// `Int32`: A location in memory.
-    case SingleInstruction(Int32)
+	/// - Parameter location: A location in memory.
+	case SingleInstruction(location: Int32)
 	/// Print a number of words beginning at a location in memory.
 	///
-	/// Associated values:
-	/// - `Either<Int32, Register>`: The location or register whose value at
-	/// which memory values will be printed.
-	/// - `Int`: The number of words to print.
-    case Memory(Either<Int32, Register>, Int)
+	/// - Parameters:
+	///		- location: The location or register whose value at which memory
+	///		values will be printed.
+	///		- numWords: The number of words to print.
+	case Memory(location: Either<Int32, Register>, numWords: Int)
 	/// Set register dumps to print out values in hexadecimal.
 	case Hex
 	/// Set register dumps to print out values in decimal.
@@ -70,15 +67,13 @@ enum Command {
     case NoOp
 	/// Open a file to read instructions from, pausing auto-execution first.
 	///
-	/// Associated values:
-	/// `String`: The file name to be opened.
-    case UseFile(String)
+	/// - Parameter file: The file name to be opened.
+	case UseFile(file: String)
 	/// Exit the interpreter.
     case Exit
 	/// An invalid command.
 	///
-	/// Associated values:
-	/// `String`: The reason that this command was invalid.
+	/// - Parameter string: The reason that this command was invalid.
     case Invalid(String)
     
     /// Construct a Command from an input string. Never fails, but may be of 
@@ -108,7 +103,7 @@ enum Command {
                 self = .Invalid("No label name supplied.")
             } else {
                 if validLabelRegex.test(args[0]) {
-                    self = .SingleLabel(args.first!)
+                    self = .SingleLabel(label: args.first!)
                 } else {
                     self = .Invalid("Invalid label: \(args[0])")
                 }
@@ -126,7 +121,7 @@ enum Command {
                 if scanner.scanHexInt(pointer) {
                     if pointer.memory != 0 && pointer.memory < UINT32_MAX {
                         // Safe to make an Int32 from this value
-                        self = .SingleInstruction(Int32(pointer.memory))
+                        self = .SingleInstruction(location: Int32(pointer.memory))
                     } else {
                         // Unsafe to make an Int32 from this value, just complain
                         self = .Invalid("Invalid location: \(args[0])")
@@ -155,7 +150,7 @@ enum Command {
                     } else {
                         numWords = 4
                     }
-                    self = .Memory(.Right(reg), numWords)
+					self = .Memory(location: .Right(reg), numWords: numWords)
                 } else {
                     // To read a hex value
                     let scanner = NSScanner(string: args[0])
@@ -179,7 +174,7 @@ enum Command {
                                 } else {
                                     numWords = 4
                                 }
-                                self = .Memory(.Left(address), numWords)
+								self = .Memory(location: .Left(address), numWords: numWords)
                             }
                         } else {
                             // Unsafe to make an Int32 from this value, just complain
@@ -197,7 +192,7 @@ enum Command {
                 self = .Invalid("No register supplied.")
             } else {
                 if validRegisters.contains(args[0]) {
-                    self = .SingleRegister(args[0])
+					self = .SingleRegister(register: args[0])
                 } else {
                     self = .Invalid("Invalid register reference: \(args[0])")
                 }
@@ -226,7 +221,7 @@ enum Command {
             if args.count == 0 {
                 self = .Invalid("No file name supplied.")
             } else {
-                self = .UseFile(args[0])
+                self = .UseFile(file: args[0])
             }
         case "exit", "quit", "q":
             self = .Exit

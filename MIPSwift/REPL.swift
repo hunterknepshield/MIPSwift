@@ -365,7 +365,7 @@ class REPL {
 	/// Execute a parsed instruction.
     func executeInstruction(instruction: Instruction) {
         if self.trace {
-            print(instruction)
+			print("\(instruction)\t\t\(instruction.numericEncoding.format(PrintOption.Binary.rawValue))")
         }
         // Update the program counter
         let newPc = instruction.location + instruction.pcIncrement
@@ -375,7 +375,13 @@ class REPL {
         switch(instruction.type) {
         case let .ALUR(op, dest, src1, src2):
             let src1Value = self.registers.get(src1.name)
-            let src2Value = self.registers.get(src2.name)
+			let src2Value: Int32
+			switch(src2) {
+			case .Left(let reg):
+				src2Value = self.registers.get(reg.name)
+			case .Right(let shift):
+				src2Value = shift
+			}
             switch(op) {
             case .Left(let op32):
                 let result = op32(src1Value, src2Value)

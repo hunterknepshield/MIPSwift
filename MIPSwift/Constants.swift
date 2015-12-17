@@ -59,7 +59,7 @@ let lo = Register("$lo", writing: true, user: false)!
 let commandDelimiter = ":"
 /// Marks the beginning of an assembler directive, e.g. .text.
 let directiveDelimiter = "."
-/// Marks the beginning of a string argument, e.g. .ascii "This is a string."
+/// Marks the beginning of a string argument, e.g. .asciiz "This is a string."
 let stringLiteralDelimiter = "\""
 /// Marks the beginning of a register reference, e.g. add $t0, $t1, $t2.
 let registerDelimiter = "$"
@@ -76,3 +76,12 @@ let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: 
 /// A regular expression that matches only valid labels. All valid labels must
 /// be alphanumeric, and must start with a letter.
 let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$")!
+
+// MARK: Instruction parsing constants
+
+/// Maps R-type instruction names to function codes (all R-type opcodes are 000000).
+let rTypeFunctionCodes: [String : Int32] = ["add": 0x20, "addu": 0x21, "and": 0x24, "break": 0x0D, "div": 0x1A, "divu": 0x1B, "jalr": 0x09, "jr": 0x08, "mfhi": 0x10, "mflo": 0x12, "mthi": 0x11, "mtlo": 0x13, "mult": 0x18, "multu": 0x19, "nor": 0x27, "or": 0x25, "sll": 0x00, "sllv": 0x04, "slt": 0x2A, "sltu": 0x2B, "sra": 0x03, "srav": 0x07, "srl": 0x02, "srlv": 0x06, "sub": 0x22, "subu": 0x23, "syscall": 0x0C, "xor": 0x26]
+/// Maps I-type instruction names to opcodes.
+let iTypeOpcodes: [String : Int32] = ["addi": 0x08, "addiu": 0x09, "andi": 0x0C, "beq": 0x04, "bgez": 0x01, "bgtz": 0x07, "blez": 0x06, "bltz": 0x01, "bne": 0x05, "lb": 0x20, "lbu": 0x24, "lh": 0x21, "lhu": 0x25, "lui": 0x0F, "lw": 0x23, "lwc1": 0x31, "ori": 0x0D, "sb": 0x28, "slti": 0x09, "sltiu": 0x0B, "sh": 0x29, "sw": 0x2B, "swc1": 0x39, "xori": 0x0F]
+/// Maps J-type instruction names to opcodes.
+let jTypeOpcodes : [String : Int32] = ["j": 0x02, "jal": 0x03]

@@ -13,7 +13,7 @@ li	$s2, 67
 sw	$s0, 0($sp)
 sw	$s1, 4($sp)
 sw	$s2, -4($sp)
-:mem $sp
 addi	$sp, $sp, -4
 :mem $sp
 # syscall is ready to go (read int)
+add	$t1, $t1, $t1

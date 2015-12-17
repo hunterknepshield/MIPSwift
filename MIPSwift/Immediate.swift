@@ -13,7 +13,10 @@ struct Immediate {
 	/// Limited to 16 bits by the structure of MIPS instructions themselves.
     var value: Int16
 	/// The 32-bit value with which operations can be performed.
-    var signExtended: Int32 { get { return Int32(value) } }
+    var signExtended: Int32 { get { return Int32(self.value) } }
+	/// The unsigned 32-bit value that represents this immediate, used for
+	/// determining the encoded value of an instruction.
+	var unsignedExtended: UInt32 { get { return UInt32(UInt16(bitPattern: self.value)) } }
     
     /// Initialize an immediate value from an integer.
     init(value: Int16) {
