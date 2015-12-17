@@ -125,38 +125,47 @@ class Instruction: CustomStringConvertible {
 	/// The final parsed representation of the instruction.
     let type: InstructionType
 	/// The 'pretty' formatting of this instruction's arguments.
-    var instructionString: String {
+    var instructionString: String? {
         get {
-            if self.arguments.count > 0 {
-                var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
-                if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
-                    // Add string literal delimiters before and after arguments; only for .ascii/.asciiz
-                    string += stringLiteralDelimiter + self.arguments[1].toStringWithLiteralEscapes() + stringLiteralDelimiter
-                } else if case .Memory(_) = self.type {
-                    // Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
-                    string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
-                } else {
-                    var counter = 0
-                    self.arguments[1..<self.arguments.count].forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
-                }
-                return string
-            } else {
-                return ""
-            }
+            if self.arguments.count == 0 {
+				return nil
+			}
+			var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
+			if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
+				// Add string literal delimiters before and after arguments; only for .ascii/.asciiz
+				string += stringLiteralDelimiter + self.arguments[1].toStringWithLiteralEscapes() + stringLiteralDelimiter
+			} else if case .Memory(_) = self.type {
+				// Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
+				string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
+			} else {
+				// Default formatting for instruction, e.g. add	$t0, $t1, $t2
+				var counter = 0
+				self.arguments[1..<self.arguments.count].forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
+			}
+			return string
         }
     }
+	/// All labels that are on this instruction, formatted to come directly
+	/// after one another.
+	var labelString: String? {
+		get {
+			if self.labels.count == 0 {
+				return nil
+			}
+			return self.labels.joinWithSeparator(labelDelimiter) + labelDelimiter
+		}
+	}
 	/// The 'pretty' formatting of this instruction's arguments, with any labels
 	/// preceeding it, and any comments following it.
-    var completeString: String {
+    var completeString: String? {
         get {
-            var string = ""
-            var counter = 0
-            self.labels.forEach({ string += "\($0):" + (++counter < self.labels.count ? "" : "\t") })
-            string += self.instructionString
-            if self.comment != nil && self.comment != "" {
-                string += " " + self.comment!
-            }
-            return string
+			if self.labels.count == 0 && self.comment == nil && self.instructionString == nil {
+				// Nothing at all to print in this instruction; should never happen
+				return nil
+			}
+			let label = self.labelString ?? ""
+			let instruction = self.instructionString ?? ""
+			return label.stringByPaddingToLength(24, withString: " ", startingAtIndex: 0) + instruction.stringByPaddingToLength(32, withString: " ", startingAtIndex: 0) + (self.comment ?? "")
         }
     }
 	/// The raw encoding of this instruction in hexadecimal format.
@@ -199,7 +208,7 @@ class Instruction: CustomStringConvertible {
 					encoding |= shift << hShift
 				}
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
-					print("Unrepresentable instruction: \(self.rawString)")
+					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
 				}
 				encoding |= functionCode
@@ -210,7 +219,7 @@ class Instruction: CustomStringConvertible {
 				encoding |= src1.number << sShift
 				encoding |= src2.unsignedExtended.signed()
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
-					print("Unrepresentable instruction: \(self.rawString)")
+					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
@@ -221,7 +230,7 @@ class Instruction: CustomStringConvertible {
 				encoding |= addr.number << sShift
 				encoding |= offset.unsignedExtended.signed()
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
-					print("Unrepresentable instruction: \(self.rawString)")
+					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
@@ -234,7 +243,7 @@ class Instruction: CustomStringConvertible {
 					// 0000 00ss sss0 0000 0000 0000 00ff ffff
 					encoding |= reg.number << sShift
 					guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
-						print("Unrepresentable instruction: \(self.rawString)")
+						print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 						return INT32_MAX
 					}
 					encoding |= functionCode
@@ -273,7 +282,7 @@ class Instruction: CustomStringConvertible {
 				}
 				encoding |= src2Num << tShift
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
-					print("Unrepresentable instruction: \(self.rawString)")
+					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
@@ -283,18 +292,18 @@ class Instruction: CustomStringConvertible {
 			case .Syscall:
 				// Technically an R-type instruction; everything but function code is 0
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
-					print("Unrepresentable instruction: \(self.rawString)")
+					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
 				}
 				encoding |= functionCode
 			default:
-				print("Unrepresentable instruction: \(self.rawString)")
+				print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 				return INT32_MAX
 			}
 			return encoding
 		}
 	}
-    var description: String { get { return "\(self.location.toHexWith0x()):\t\(self.instructionString)" } }
+    var description: String { get { return "\(self.location.toHexWith0x()):\t\(self.instructionString ?? (self.completeString ?? self.rawString))" } }
 	
 	/// Initialize an instruction with all data already parsed and validated.
 	/// This initializer should only be used with simple instructions. All

@@ -257,12 +257,21 @@ class REPL {
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
             for i in 0..<numWords {
                 let address = location + 4*i // Loading in 4-byte chunks
-                let highest = self.memory[address] ?? 0
-                let higher = self.memory[address + 1] ?? 0
-                let lower = self.memory[address + 2] ?? 0
-                let lowest = self.memory[address + 3] ?? 0
-                words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
-				ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
+				if let instruction = self.locationsToInstructions[address] {
+					// Check the instruction memory first
+					let encoding = instruction.numericEncoding
+					let (highest, higher, lower, lowest) = encoding.toBytes()
+					words.append(encoding)
+					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
+				} else {
+					// Check regular memory
+					let highest = self.memory[address] ?? 0
+					let higher = self.memory[address + 1] ?? 0
+					let lower = self.memory[address + 2] ?? 0
+					let lowest = self.memory[address + 3] ?? 0
+					words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
+					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
+				}
             }
             var counter = 0 // For formatting individual lines
 			var lineString = "" // The string that will be printed
