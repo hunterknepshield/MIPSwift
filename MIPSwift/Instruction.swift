@@ -177,7 +177,7 @@ class Instruction: CustomStringConvertible {
 			
 			// TODO li - either decompose or...?
 			
-			let oShift: Int32 = 27 // Number of bits to shift the opcode in
+			let oShift: Int32 = 26 // Number of bits to shift the opcode in
 			let sShift: Int32 = 21 // Number of bits to shift the s register in
 			let tShift: Int32 = 16 // Number of bits to shift the t register in
 			let dShift: Int32 = 11 // Number of bits to shift the d register in
