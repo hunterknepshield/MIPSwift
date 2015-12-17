@@ -21,7 +21,7 @@ typealias Operation32 = (Int32, Int32) -> Int32
 /// end up splitting that back into 2 32-bit integers anyways; this format
 /// reduces the parsing needed at execution time and makes division/remainder
 /// instructions considerably simpler.
-typealias Operation64 = (Int32, Int32) -> (Int32, Int32)
+typealias Operation64 = (Int32, Int32) -> (hi: Int32, lo: Int32)
 /// 2 operands, 1 boolean result. Generally used for branch instructions.
 typealias OperationBool = (Int32, Int32) -> Bool
 
@@ -33,29 +33,25 @@ enum InstructionType {
 	/// may or may not be used based on which type the operation is.
 	///
 	/// Associated values:
-	/// - `Either<Operation32, (Operation64, Bool)>`: This instruction may
-	/// generate either a 32-bit result or a 64-bit result depending on the
-	/// wrapped type.
-	/// - `Register?`: The destination register of the instruction; guaranteed to
-	/// be non-nil if the Either type wraps an Operation32. If the Either type
-	/// wraps an Operation64 and Bool and this is non-nil, then the Bool is used
-	/// to determine if the result from the 'hi' portion of the result is used.
+	/// - `Either<Operation32, Operation64>`: This instruction may generate
+	/// either a 32-bit result or a 64-bit result depending on the wrapped type.
+	/// - `Register`: The destination register of the instruction. If the Either
+	/// type wraps an Operation64, hi and lo are used as destinations instead.
 	/// - `Register`: The first source register for the instruction.
 	///	- `Register`: The second source register for the instruction.
-    case ALUR(Either<Operation32, (Operation64, Bool)>, Register?, Register, Register)
+    case ALUR(Either<Operation32, Operation64>, Register, Register, Register)
 	/// An ALU instruction that uses a register and an immediate value as its
 	/// sources.
 	///
 	/// Associated values:
-	/// - `Either<Operation32, (Operation64, Bool)>`: This instruction may
-	/// generate either a 32-bit result or a 64-bit result depending on the
-	/// wrapped type.
+	/// - `Operation32`: This instruction wraps a function that always generates
+	/// a 32-bit result.
 	/// - `Register`: The destination register of the instruction. If the Either
 	/// type wraps an Operation64 and Bool, then the Bool is used to determine
 	/// if the result from the 'hi' portion of the result is used.
 	///	- `Register`: The first source for the instruction.
 	///	- `Immediate`: The second source for the instruction.
-    case ALUI(Either<Operation32, (Operation64, Bool)>, Register, Register, Immediate)
+    case ALUI(Operation32, Register, Register, Immediate)
 	/// A memory instruction that calculates an effective address in memory and
 	/// loads or stores data from that address into or from a register.
 	///
@@ -419,7 +415,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
 				return nil
 			}
-			type = .ALUI(.Left(args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }), dest, src1, src2)
+			type = .ALUI(args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }, dest, src1, src2)
 			let addi = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [addi]
 		case "andi", "ori", "xori":
@@ -430,7 +426,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
 				return nil
 			}
-			type = .ALUI(.Left(args[0] == "andi" ? (&) : (args[0] == "ori" ? (|) : (^))), dest, src1, src2)
+			type = .ALUI(args[0] == "andi" ? (&) : (args[0] == "ori" ? (|) : (^)), dest, src1, src2)
 			let bitwisei = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [bitwisei]
 		case "slti", "sltiu":
@@ -441,7 +437,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
 				return nil
 			}
-			type = .ALUI(.Left(args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }), dest, src1, src2)
+			type = .ALUI(args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }, dest, src1, src2)
 			let slti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [slti]
 		case "sll", "sra", "srl":
@@ -454,11 +450,11 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			if !(0..<32 ~= src2.value) {
-				// REPL will terminate if it were to attempt executing a bitshift of more than 32 bits
+				// REPL would otherwise terminate if it were to attempt executing a bitshift of more than 32 bits
 				print("Invalid shift factor: \(src2.value)")
 				return nil
 			}
-			type = .ALUI(.Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() })), dest, src1, src2)
+			type = .ALUI(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() }), dest, src1, src2)
 			let shifti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [shifti]
 		case "lui":
@@ -469,7 +465,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src = Immediate(args[2]) else {
 				return nil
 			}
-			type = .ALUI(.Left({ return $1 << 16 }), dest, zero, src)
+			type = .ALUI({ return $1 << 16 }, dest, zero, src)
 			let lui = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [lui]
 		// MARK: Memory instruction parsing
@@ -554,7 +550,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src = Immediate(args[2]) else {
 				return nil
 			}
-			type = .ALUI(.Left(+), dest, zero, src)
+			type = .ALUI((+), dest, zero, src)
 			let li = Instruction(rawString: string, location: location, pcIncrement: 8, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [li]
 		case "move":
@@ -587,7 +583,7 @@ class Instruction: CustomStringConvertible {
 			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .ALUR(.Right({ let fullValue = (args[0] == "mult" ? $0.signed64()&*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }, false), nil, src1, src2)
+			type = .ALUR(.Right({ let fullValue = (args[0] == "mult" ? $0.signed64()&*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }), zero, src1, src2) // Destination doesn't matter
 			let mult = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [mult]
 		case "mul":
@@ -626,15 +622,15 @@ class Instruction: CustomStringConvertible {
 				return [li, mult, mflo]
 			}
 		case "div" where argCount != 3, "divu":
+			// Catches only the real div instruction, which puts $0/$1 in lo, $0%$1 in hi
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
 			}
-			// This is the real instruction, which just sticks $0 / $1 in lo, $0 % $1 in hi
 			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .ALUR(.Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned(), $1.unsigned()).0.signed(), UInt32.divideWithOverflow($0.unsigned(), $1.unsigned()).0.signed()) }, false), nil, src1, src2) // Boolean value doesn't matter because destination is nil
+			type = .ALUR(.Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned(), $1.unsigned()).0.signed(), UInt32.divideWithOverflow($0.unsigned(), $1.unsigned()).0.signed()) }), zero, src1, src2) // Destination doesn't matter
 			let div = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [div]
 		case "rem", "div":

@@ -379,43 +379,17 @@ class REPL {
             switch(op) {
             case .Left(let op32):
                 let result = op32(src1Value, src2Value)
-                self.registers.set(dest!.name, result) // Destination guaranteed to be non-nil
-            case .Right(let (op64, moveFromHi)):
-                // This is a div/mult instruction or a div/rem/mul pseudo instruction
+                self.registers.set(dest.name, result)
+            case .Right(let op64):
+                // This instruction generates a 64-bit result, whose value will be stored in hi and lo
                 let (hiValue, loValue) = op64(src1Value, src2Value)
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
-                if dest != nil {
-                    // This was one of the pseudoinstructions, so there is a destination
-                    // Hi and lo are always modified to mimic the real pseudoinstruction's execution
-                    // Essentially, this amounts to an additional mfhi/mflo after the div/mul executes
-                    if moveFromHi {
-                        self.registers.set(dest!.name, hiValue)
-                    } else {
-                        self.registers.set(dest!.name, loValue)
-                    }
-                }
             }
         case let .ALUI(op, dest, src1, src2):
             let src1Value = self.registers.get(src1.name)
-            switch(op) {
-            case .Left(let op32):
-                let result = op32(src1Value, src2.signExtended)
-                self.registers.set(dest.name, result)
-            case .Right(let (op64, moveFromHi)):
-                // This was a div/rem/mul pseudo instruction with an immediate
-				// In real MIPS, the immediate is loaded into $at, then the
-				// actual instruction is treated the same as the ALU-R type
-				self.registers.set(at.name, src2.signExtended) // Simulates li	$at, [imm]
-                let (hiValue, loValue) = op64(src1Value, src2.signExtended)
-                self.registers.set(hi.name, hiValue)
-                self.registers.set(lo.name, loValue)
-                if moveFromHi {
-                    self.registers.set(dest.name, hiValue)
-                } else {
-                    self.registers.set(dest.name, loValue)
-                }
-            }
+			let result = op(src1Value, src2.signExtended)
+			self.registers.set(dest.name, result)
         case let .Memory(storing, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
