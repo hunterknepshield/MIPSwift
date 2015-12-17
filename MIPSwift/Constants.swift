@@ -59,7 +59,7 @@ let lo = Register("$lo", writing: true, user: false)!
 let commandDelimiter = ":"
 /// Marks the beginning of an assembler directive, e.g. .text.
 let directiveDelimiter = "."
-/// Marks the beginning of a string argument, e.g. .asciiz "This is a string."
+/// Marks the beginning or end of a string argument, e.g. .asciiz "This is a string."
 let stringLiteralDelimiter = "\""
 /// Marks the beginning of a register reference, e.g. add $t0, $t1, $t2.
 let registerDelimiter = "$"
@@ -76,6 +76,9 @@ let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: 
 /// A regular expression that matches only valid labels. All valid labels must
 /// be alphanumeric, and must start with a letter.
 let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$")!
+/// A regular expression that matches only valid hexadecimal numbers that may be
+/// converted to a 32-bit number (1 to 8 hex characters).
+let valid32BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,8}$")!
 
 // MARK: Instruction parsing constants
 

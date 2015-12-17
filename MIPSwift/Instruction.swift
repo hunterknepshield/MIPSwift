@@ -81,9 +81,10 @@ enum InstructionType {
 	///		- link: Used to determine if this instruction links the current
 	///		program counter into $ra or not.
 	///		- src1: The first source for the instruction.
-	///		- src2: The second source for the instruction.
+	///		- src2: The second source for the instruction, nil if comparing with
+	///		zero.
 	///		- dest: The destination label to jump to if this branch is taken.
-	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register, dest: String)
+	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register?, dest: String)
 	/// A system call. This instruction type is used to allow the assembly
 	/// program to do system-level things like read input and print.
 	///
@@ -176,27 +177,26 @@ class Instruction: CustomStringConvertible {
 			
 			// TODO li - either decompose or...?
 			
+			let oShift: Int32 = 27 // Number of bits to shift the opcode in
+			let sShift: Int32 = 21 // Number of bits to shift the s register in
+			let tShift: Int32 = 16 // Number of bits to shift the t register in
+			let dShift: Int32 = 11 // Number of bits to shift the d register in
+			let hShift: Int32 = 6 // Number of bits to shift the shift amount in
+			// Immediate and function code can just be directly added with an or
 			var encoding = Int32.allZeros
 			switch(self.type) {
 			case let .ALUR(_, dest, src1, src2):
-				// Format for R-type instructions:
+				// Format for R-type instructions is
 				// 0000 00ss ssst tttt dddd dhhh hhff ffff
 				// dest is d, s, t, and h depend on whether src2 is a register or shift amount
-				let destNum = dest.number
-				encoding |= destNum << 11 // dest is d
-				let src1Num = src1.number
-				let src2Num: Int32
+				encoding |= dest.number << dShift
 				switch(src2) {
 				case .Left(let reg):
-					// src1 is s, src2 is t
-					encoding |= src1Num << 21
-					src2Num = reg.number
-					encoding |= src2Num << 16
+					encoding |= src1.number << sShift
+					encoding |= reg.number << tShift
 				case .Right(let shift):
-					// src1 is t, src2 is h
-					encoding |= src1Num << 16
-					src2Num = shift
-					encoding |= src2Num << 11
+					encoding |= src1.number << tShift
+					encoding |= shift << hShift
 				}
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.rawString)")
@@ -204,49 +204,84 @@ class Instruction: CustomStringConvertible {
 				}
 				encoding |= functionCode
 			case let .ALUI(_, dest, src1, src2):
-				// Format for I-type instructions:
+				// Format for I-type instructions is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
-				// dest is t, src1 is s, src2 is i
-				let destNum = dest.number
-				encoding |= destNum << 16
-				let src1Num = src1.number
-				encoding |= src1Num << 21
-				let src2Num = src2.unsignedExtended.signed()
-				// let src2Num = src2.signExtended
-				encoding |= src2Num
+				encoding |= dest.number << tShift
+				encoding |= src1.number << sShift
+				encoding |= src2.unsignedExtended.signed()
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.rawString)")
 					return INT32_MAX
 				}
-				encoding |= opcode << 27
+				encoding |= opcode << oShift
 			case let .Memory(_, _, dest, offset, addr):
-				// Format for I-type instructions:
+				// Format for I-type instructions is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
-				// dest is t, addr is s, offset is i
-				let destNum = dest.number
-				encoding |= destNum << 16
-				let addrNum = addr.number
-				encoding |= addrNum << 21
-				let offsetNum = offset.unsignedExtended.signed()
-				// let offsetNum = offset.signExtended
-				encoding |= offsetNum
+				encoding |= dest.number << tShift
+				encoding |= addr.number << sShift
+				encoding |= offset.unsignedExtended.signed()
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.rawString)")
 					return INT32_MAX
 				}
-				encoding |= opcode << 27
+				encoding |= opcode << oShift
 			case let .Jump(_, dest):
 				// Interesting problem here; don't know how to generate immediate offset without information from the outside world
-				print("Problem :(")
-				print(dest)
-				break
+				switch(dest) {
+				case .Left(let reg):
+					// This is actually an R-type instruction, not a J-type
+					// Format for the R-type jump:
+					// 0000 00ss sss0 0000 0000 0000 00ff ffff
+					encoding |= reg.number << sShift
+					guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
+						print("Unrepresentable instruction: \(self.rawString)")
+						return INT32_MAX
+					}
+					encoding |= functionCode
+				case .Right(let label):
+					// This is a true J-type
+					// TODO figure out a way to calculate the 26-bit offset's value
+					print("Problem D: \(label)")
+				}
 			case let .Branch(_, _, src1, src2, dest):
 				// Again don't know how to generate offset without information from the outside world
-				print("Problem :(")
-				print(src1, src2, dest)
+				// Additionally, branches that compare with zero have different values for t
+				// bgez = 00001 = 1, bgezal = 10001 = 17, bgtz = 00000 = 0,
+				// bltz = 00000 = 0, bltzal = 10000 = 16, blez = 00000 = 0
+				// Branch instructions are I-type, so their format is
+				// oooo ooss ssst tttt iiii iiii iiii iiii
+				// src1 is s, src2 is t
+				encoding |= src1.number << sShift
+				let src2Num: Int32
+				if src2 != nil {
+					// This was a beq or bne
+					src2Num = src2!.number
+				} else {
+					// This was a branch that compares with 0
+					switch(self.arguments[0]) {
+					case "bgez":
+						src2Num = 1
+					case "bgezal":
+						src2Num = 17
+					case "bltzal":
+						src2Num = 16
+					case "bltz", "bgtz", "blez":
+						src2Num = 0
+					default:
+						src2Num = INT32_MAX
+					}
+				}
+				encoding |= src2Num << tShift
+				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
+					print("Unrepresentable instruction: \(self.rawString)")
+					return INT32_MAX
+				}
+				encoding |= opcode << oShift
+				// TODO figure out a way to get the lowest 16 bits
+				print("Problem D: \(dest)")
 				break
 			case .Syscall:
-				// Technically an R-type instruction
+				// Technically an R-type instruction; everything but function code is 0
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.rawString)")
 					return INT32_MAX
@@ -612,10 +647,10 @@ class Instruction: CustomStringConvertible {
 			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .Branch(op: { return args[0] == "beq" ? ($0 == $1) : ($0 != $1) }, link: false, src1: src1, src2: src2, dest: args[3])
+			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: args[3])
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [equal]
-		case "bgez", "bgezal", "blz", "blzal", "bgtz", "bltez":
+		case "bgez", "bgezal", "bltz", "bltzal", "bgtz", "bltez":
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
@@ -629,7 +664,7 @@ class Instruction: CustomStringConvertible {
 			switch(args[0]) {
 			case "bgez", "bgezal":
 				op = (>=)
-			case "blz", "blzal":
+			case "bltz", "bltzal":
 				op = (<)
 			case "bgtz":
 				op = (>)
@@ -638,7 +673,7 @@ class Instruction: CustomStringConvertible {
 			default:
 				fatalError("Invalid branch instruction \(args[0])")
 			}
-			type = .Branch(op: op, link: link, src1: src1, src2: zero, dest: args[2])
+			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: args[2])
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [compare]
 		// MARK: More complex/pseudo instruction parsing

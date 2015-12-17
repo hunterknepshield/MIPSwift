@@ -70,7 +70,11 @@ class REPL {
             input.forEach({ inputString in
                 if inputString.rangeOfString(commandDelimiter)?.minElement() == inputString.startIndex || inputString == "" {
                     // This is a command, not an instruction; parse it as such
-                    executeCommand(Command(inputString))
+					guard let command = Command(inputString) else {
+						print("Invalid command: \(inputString)")
+						return
+					}
+                    executeCommand(command)
                 } else if let instArray = Instruction.parseString(inputString, location: currentPc, verbose: verbose) {
 					instArray.forEach({ inst in
 						switch(inst.type) {
@@ -239,8 +243,14 @@ class REPL {
             switch(loc) {
             case .Left(let int):
                 location = int
-            case .Right(let reg):
-                location = self.registers.get(reg.name)
+			case .Middle(let reg):
+				location = self.registers.get(reg.name)
+            case .Right(let label):
+				guard let loc = labelsToLocations[label] else {
+					print("Invalid label: \(label)")
+					return
+				}
+				location = loc
             }
             // Print numWords*4 bytes of memory starting at location
             var words = [Int32]()
@@ -316,7 +326,7 @@ class REPL {
             print("\tlabel|l [label]: print the location of a label.")
             print("\tinstructions|insts|instructiondump|instdump|id: print all instructions as well as their locations.")
             print("\tinstruction|inst|i [location]: print the instruction at a location.")
-            print("\tmemory|mem|m [location|register] [count]: print a number of words beginning at a location in memory.")
+            print("\tmemory|mem|m [location|register|label] [count]: print a number of words beginning at a location in memory.")
             print("\thexadecimal|hex: set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal|dec: set register dumps to print out values in signed decimal (base 10).")
             print("\toctal|oct: set register dumps to print out values in octal (base 8).")
@@ -357,8 +367,6 @@ class REPL {
             self.inputSource = openFile
             self.autoexecute = false // Disable for good measure
             print("Opened file: \(filename)")
-        case .Invalid(let invalid):
-            print("Invalid command: \(invalid)")
         }
     }
 	
@@ -400,7 +408,7 @@ class REPL {
             let addrRegValue = self.registers.get(addrReg.name)
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
-                print("Unaligned memory reference: \(address.toHexWith0x())")
+                print("Unaligned memory address: \(address.toHexWith0x())")
                 // TODO disallow
             }
             if storing {
@@ -469,8 +477,15 @@ class REPL {
             self.currentPc = destinationAddress
         case let .Branch(op, link, src1, src2, dest):
             let reg1Value = self.registers.get(src1.name)
-            let reg2Value = self.registers.get(src2.name)
-            if op(reg1Value, reg2Value) {
+			let src2Value: Int32
+			if src2 != nil {
+				// Comparing with a second register
+				src2Value = self.registers.get(src2!.name)
+			} else {
+				// Comparing with 0
+				src2Value = 0
+			}
+            if op(reg1Value, src2Value) {
                 // Take this branch
                 guard let destinationAddress = labelsToLocations[dest] else {
                     fatalError("Undefined label: \(dest)") // Not checked until execution to allow labels do be defined anywhere before running
