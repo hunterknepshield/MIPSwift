@@ -166,7 +166,7 @@ enum Command {
                             // Safe to make an Int32 from this value
                             let address = pointer.memory.signed()
                             if address % 4 != 0 {
-                                self = .Invalid("Unaligned memory address: \(address.toHexWith0x())")
+                                self = .Invalid("Unaligned memory reference: \(address.toHexWith0x())")
                             } else {
                                 let numWords: Int
                                 if args.count > 1 {

@@ -71,55 +71,56 @@ class REPL {
                 if inputString.rangeOfString(commandDelimiter)?.minElement() == inputString.startIndex || inputString == "" {
                     // This is a command, not an instruction; parse it as such
                     executeCommand(Command(inputString))
-                } else if var inst = Instruction(string: inputString, location: currentPc, verbose: verbose) {
-                    switch(inst.type) {
-                    case .NonExecutable:
-                        // This line contained only labels and/or comments; don't execute anything, but make sure labels are all valid
-                        let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
-                        if dupes.count > 0 {
-                            // There was at least one duplicate label; don't store/execute anything
-                            print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-                            var counter = 0
-                            dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
-                            return
-                        }
-                        inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
-                    default:
-                        // Increment the program counter, store its new value in the register file, and then execute
-                        let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
-                        if dupes.count > 0 {
-                            // There was at least one duplicate label; don't store/execute anything
-                            print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-                            var counter = 0
-                            dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
-                            return
-                        }
-                        inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
-                        // Check if this location already contains an instruction
-                        if let existingInstruction = locationsToInstructions[inst.location] {
-                            switch(existingInstruction.type) {
-                            case .NonExecutable:
-                                // This is fine; only labels or comments here, just overwrite
-                                inst.labels = existingInstruction.labels + inst.labels
-                                inst.comment = "\(existingInstruction.comment ?? "") \(inst.comment ?? "")"
-                                locationsToInstructions[inst.location] = inst
-                            default:
-                                // This is bad; overwriting an executable instruction
-                                // This is likely caused by an issue with internal REPL state
-                                print("Cannot overwrite existing instruction: \(existingInstruction)")
-                            }
-                        }
-                        
-                        // Increment the program counter by however much the instruction requires
-                        // Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
-                        locationsToInstructions[self.currentPc] = inst
-                        let newPc = self.currentPc + inst.pcIncrement
-                        self.currentPc = newPc
-                        
-                        if self.autoexecute {
-                            executeInstruction(inst)
-                        }
-                    }
+                } else if let instArray = Instruction.parseString(inputString, location: currentPc, verbose: verbose) {
+					instArray.forEach({ inst in
+						switch(inst.type) {
+						case .NonExecutable:
+							// This line contained only labels and/or comments; don't execute anything, but make sure labels are all valid
+							let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
+							if dupes.count > 0 {
+								// There was at least one duplicate label; don't store/execute anything
+								print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
+								var counter = 0
+								dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
+								return
+							}
+							inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
+						default:
+							// Increment the program counter, store its new value in the register file, and then execute
+							let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
+							if dupes.count > 0 {
+								// There was at least one duplicate label; don't store/execute anything
+								print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
+								var counter = 0
+								dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
+								return
+							}
+							inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
+							// Check if this location already contains an instruction
+							if let existingInstruction = locationsToInstructions[inst.location] {
+								switch(existingInstruction.type) {
+								case .NonExecutable:
+									// This is fine; only labels or comments here, just overwrite
+									inst.labels = existingInstruction.labels + inst.labels
+									locationsToInstructions[inst.location] = inst
+								default:
+									// This is bad; overwriting an executable instruction
+									// This is likely caused by an issue with internal REPL state
+									print("Cannot overwrite existing instruction: \(existingInstruction)")
+								}
+							}
+							
+							// Increment the program counter by however much the instruction requires
+							// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
+							locationsToInstructions[self.currentPc] = inst
+							let newPc = self.currentPc + inst.pcIncrement
+							self.currentPc = newPc
+							
+							if self.autoexecute {
+								executeInstruction(inst)
+							}
+						}
+					})
                 } else {
                     print("Invalid instruction: \(inputString)")
                 }
@@ -143,16 +144,12 @@ class REPL {
             self.usingFile = false
             return [":noop"]
         }
-        let inputString = NSString(data: inputData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()) // Trims whitespace before of and after the input, including trailing newline
-        var returnedArray: [String]
-        if self.usingFile {
-            // inputData contains the entire file's contents; NSFileHandles do not read files line by line
-            returnedArray = inputString.componentsSeparatedByCharactersInSet(NSCharacterSet.newlineCharacterSet())
-        } else {
-            returnedArray = [inputString]
-        }
-        returnedArray = returnedArray.filter({ return !$0.isEmpty }) // Remove any empty lines
-        returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : ":\(inputString)" }) // If any strings contain non-ASCII characters, make them invalid commands
+		// Trims whitespace before of and after the input, including trailing newline, then split on newline characters
+        var returnedArray = NSString(data: inputData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()).componentsSeparatedByCharactersInSet(NSCharacterSet.newlineCharacterSet())
+		// Remove any empty lines
+        returnedArray = returnedArray.filter({ return !$0.isEmpty })
+		// If any strings contain non-ASCII characters, make them invalid commands
+        returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : ":\($0)" })
         return returnedArray
     }
 	
@@ -384,7 +381,7 @@ class REPL {
                 let result = op32(src1Value, src2Value)
                 self.registers.set(dest!.name, result) // Destination guaranteed to be non-nil
             case .Right(let (op64, moveFromHi)):
-                // This is a div/mult instruction or a div/rem/mul pseudoinstruction
+                // This is a div/mult instruction or a div/rem/mul pseudo instruction
                 let (hiValue, loValue) = op64(src1Value, src2Value)
                 self.registers.set(hi.name, hiValue)
                 self.registers.set(lo.name, loValue)
@@ -406,7 +403,7 @@ class REPL {
                 let result = op32(src1Value, src2.signExtended)
                 self.registers.set(dest.name, result)
             case .Right(let (op64, moveFromHi)):
-                // This was a div/rem/mul pseudoinstruction with an immediate
+                // This was a div/rem/mul pseudo instruction with an immediate
 				// In real MIPS, the immediate is loaded into $at, then the
 				// actual instruction is treated the same as the ALU-R type
 				self.registers.set(at.name, src2.signExtended) // Simulates li	$at, [imm]
