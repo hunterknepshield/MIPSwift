@@ -78,6 +78,8 @@ extension String {
                     result += "\""
                 case "?":
                     result += "\\?"
+				case "0":
+					result += "\0"
                 default:
                     print("Invalid escape sequence: \\\(next)")
                     throw StringParsingError.InvalidEscape
@@ -117,6 +119,8 @@ extension String {
                 result += "\\'"
             case "\"":
                 result += "\\\""
+			case "\0":
+				result += "\\0"
             default:
                 result += "\(char)"
             }
@@ -213,6 +217,23 @@ extension UInt8 {
 }
 
 // MARK: Convenience conversion between integer types
+
+extension Int16 {
+	// Quick way to convert to an unsigned 16-bit representation of self.
+	func unsigned() -> UInt16 {
+		return UInt16(bitPattern: self)
+	}
+	
+	/// Quick accessor for the lower byte of self as an unsigned 8-bit integer.
+	func unsignedLower8() -> UInt8 {
+		return UInt8(truncatingBitPattern: self.unsigned())
+	}
+	
+	/// Quick accessor for the upper byte of self as an unsigned 8-bit integer.
+	func unsignedUpper8() -> UInt8 {
+		return UInt8(truncatingBitPattern: self.unsigned() >> 8)
+	}
+}
 
 extension Int32 {
     /// Quick way to convert to an unsigned 32-bit representation of self.

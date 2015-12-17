@@ -10,24 +10,44 @@ import Foundation
 
 /// A read-eval-print loop for interpreting MIPS assembly instructions.
 class REPL {
-	/// The source from which input is currently being read.
-    var inputSource: NSFileHandle
-	/// Used to determine whether or not input is being read from a file or
-	/// standard input.
-    var usingFile: Bool
+	// MARK: Memory and state variables
+	
 	/// The register file in its current state.
-    var registers = RegisterFile()
-	/// The current value of the program counter. Used to avoid constantly
-	/// getting and setting self.registers.pc.
-    var currentPc = beginningPc
-	/// Keeps track of where execution was last paused.
-    var pausedPc: Int32?
+	var registers = RegisterFile()
 	/// Maps labels to locations in memory.
     var labelsToLocations = [String : Int32]()
 	/// Maps locations in memory to instructions.
     var locationsToInstructions = [Int32 : Instruction]()
 	/// Maps locations in memory to individual bytes.
     var memory = [Int32 : UInt8]()
+	/// The current value of the program counter. Used to avoid constantly
+	/// getting and setting self.registers.pc.
+	var currentTextLocation = beginningText
+	/// Keeps track of where execution was last paused.
+	var pausedTextLocation: Int32?
+	/// Used to determine whether things are currently being written to the data
+	/// or the text segment.
+	var writingData = false
+	/// Used to keep track of current point the interpreter is writing data to
+	/// in the data segment
+	var currentDataLocation = beginningData
+	/// Used to determine the current location at which a piece of data should
+	/// be written; may be either in the text segment or in the data segment.
+	var currentWriteLocation: Int32 {
+		get { return self.writingData ? self.currentDataLocation : self.currentTextLocation }
+		set {
+			if self.writingData { currentDataLocation = newValue }
+			else { self.currentTextLocation = newValue }
+		}
+	}
+	
+	// MARK: Interpreter settings
+	
+	/// The source from which input is currently being read.
+	var inputSource: NSFileHandle
+	/// Used to determine whether or not input is being read from a file or
+	/// standard input.
+	var usingFile: Bool
 	/// Current setting for verbose instruction parsing.
     var verbose = false
 	/// Current setting for auto-dump of registers after instruction execution.
@@ -49,7 +69,7 @@ class REPL {
         self.usingFile = options.usingFile
         
         // Set initial register values
-        self.registers.set(pc.name, currentPc)
+        self.registers.set(pc.name, currentTextLocation)
         self.registers.set(sp.name, beginningSp)
     }
 	
@@ -64,7 +84,7 @@ class REPL {
         while true {
             if !self.usingFile {
                 // Print the prompt if reading from stdIn
-                print("\(currentPc.toHexWith0x())> ", terminator: "") // Prints PC without a newline
+                print("\(self.currentWriteLocation.toHexWith0x())> ", terminator: "") // Prints PC without a newline
             }
             let input = readInput() // Read input (whitespace is already trimmed from either end)
             input.forEach({ inputString in
@@ -75,31 +95,26 @@ class REPL {
 						return
 					}
                     executeCommand(command)
-                } else if let instArray = Instruction.parseString(inputString, location: currentPc, verbose: verbose) {
+                } else if let instArray = Instruction.parseString(inputString, location: self.currentWriteLocation, verbose: verbose) {
 					instArray.forEach({ inst in
+						// Ensure all labels in this instruction are fresh
+						let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
+						if dupes.count > 0 {
+							// There was at least one duplicate label; don't store/execute anything
+							print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
+							var counter = 0
+							dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
+							return
+						}
+						inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
 						switch(inst.type) {
 						case .NonExecutable:
-							// This line contained only labels and/or comments; don't execute anything, but make sure labels are all valid
-							let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
-							if dupes.count > 0 {
-								// There was at least one duplicate label; don't store/execute anything
-								print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-								var counter = 0
-								dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
-								return
-							}
-							inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
+							// This line contained only labels and/or comments; don't execute anything.
+							locationsToInstructions[inst.location] = inst
+						case .Directive(_):
+							// This is an assembler directive; always execute these right away
+							executeDirective(inst)
 						default:
-							// Increment the program counter, store its new value in the register file, and then execute
-							let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
-							if dupes.count > 0 {
-								// There was at least one duplicate label; don't store/execute anything
-								print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-								var counter = 0
-								dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
-								return
-							}
-							inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
 							// Check if this location already contains an instruction
 							if let existingInstruction = locationsToInstructions[inst.location] {
 								switch(existingInstruction.type) {
@@ -107,18 +122,25 @@ class REPL {
 									// This is fine; only labels or comments here, just overwrite
 									inst.labels = existingInstruction.labels + inst.labels
 									locationsToInstructions[inst.location] = inst
+								case .Directive(_) where existingInstruction.pcIncrement == 0:
+									// Alright to overwrite a directive as long as its pcIncrement is 0,
+									// e.g. a .data directive
+									break
+								case _ where existingInstruction.pcIncrement == 0:
+									print("PC increment is 0 for \(existingInstruction)")
+									break
 								default:
 									// This is bad; overwriting an executable instruction
 									// This is likely caused by an issue with internal REPL state
 									print("Cannot overwrite existing instruction: \(existingInstruction)")
 								}
 							}
-							
-							// Increment the program counter by however much the instruction requires
+							// Increment the current location by however much the instruction requires
 							// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
-							locationsToInstructions[self.currentPc] = inst
-							let newPc = self.currentPc + inst.pcIncrement
-							self.currentPc = newPc
+							locationsToInstructions[self.currentWriteLocation] = inst
+							let newPc = self.currentWriteLocation + inst.pcIncrement
+							self.currentWriteLocation = newPc
+							// TODO possibly write inst.numericEncoding to memory[self.currentWriteLocation..<self.currentWriteLocation + 4] once all pseudo instructions are properly decoded?
 							
 							if self.autoexecute {
 								executeInstruction(inst)
@@ -146,14 +168,14 @@ class REPL {
             self.inputSource.closeFile()
             self.inputSource = stdIn
             self.usingFile = false
-            return [":noop"]
+            return ["\(commandDelimiter)noop"]
         }
 		// Trims whitespace before of and after the input, including trailing newline, then split on newline characters
         var returnedArray = NSString(data: inputData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet()).componentsSeparatedByCharactersInSet(NSCharacterSet.newlineCharacterSet())
 		// Remove any empty lines
         returnedArray = returnedArray.filter({ return !$0.isEmpty })
 		// If any strings contain non-ASCII characters, make them invalid commands
-        returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : ":\($0)" })
+        returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : "\(commandDelimiter)\($0)" })
         return returnedArray
     }
 	
@@ -163,19 +185,19 @@ class REPL {
         print("Resuming execution...")
         // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstructionLocation
         // Alternatively, if lastExecutedInstructionLocation's lookup is nil, nothing was ever executed, so start from the beginning
-        var currentInstruction = locationsToInstructions[pausedPc ?? beginningPc]
+        var currentInstruction = locationsToInstructions[pausedTextLocation ?? beginningText]
         while currentInstruction != nil {
             // Execute the current instruction, then execute the next instruction, etc. until nil is found
             executeInstruction(currentInstruction!)
-            currentInstruction = locationsToInstructions[currentPc]
+            currentInstruction = locationsToInstructions[currentTextLocation]
         }
         print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
         if self.autoexecute {
-            // Auto-execution is enabled, so wipe any stored pausedPc value
-            self.pausedPc = nil
+            // Auto-execution is enabled, so wipe any stored pausedTextLocation value
+            self.pausedTextLocation = nil
         } else {
-            // Update the pausedPc to note that execution has come this far
-            self.pausedPc = self.currentPc
+            // Update the pausedTextLocation to note that execution has come this far
+            self.pausedTextLocation = self.currentTextLocation
         }
     }
 	
@@ -187,7 +209,7 @@ class REPL {
             self.autoexecute = !self.autoexecute
             if self.autoexecute {
                 // If autoexecute was previously disabled, execution may need to catch up
-                if self.currentPc == self.pausedPc {
+                if self.currentTextLocation == self.pausedTextLocation {
                     // The program counter is already current, don't call resumeExecution()
                     print("Auto-execute of instructions enabled.")
                 } else {
@@ -196,7 +218,7 @@ class REPL {
                 }
             } else {
                 print("Auto-execute of instructions disabled.")
-                self.pausedPc = self.currentPc
+                self.pausedTextLocation = self.currentTextLocation
             }
         case .Execute:
             // Run commands from wherever the user last disabled auto-execute
@@ -208,7 +230,7 @@ class REPL {
         case .Trace:
             // Toggle current trace setting
             self.trace = !self.trace
-            print("Trace \(self.trace ? "enabled": "disabled").")
+            print("Trace \(self.trace ? "enabled" : "disabled").")
         case .RegisterDump:
             // Print the current contents of the register file
             print(registers)
@@ -257,9 +279,8 @@ class REPL {
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
             for i in 0..<numWords {
                 let address = location + 4*i // Loading in 4-byte chunks
-				if let instruction = self.locationsToInstructions[address] {
+				if let instruction = self.locationsToInstructions[address], let encoding = instruction.numericEncoding {
 					// Check the instruction memory first
-					let encoding = instruction.numericEncoding
 					let (highest, higher, lower, lowest) = encoding.toBytes()
 					words.append(encoding)
 					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
@@ -320,7 +341,7 @@ class REPL {
         case .Help:
             // Display the help message
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
-            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningPc.toHexWith0x())>'")
+            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.toHexWith0x())>'")
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
             print("All interpreter commands:")
@@ -379,16 +400,22 @@ class REPL {
         }
     }
 	
-	/// Execute a parsed instruction.
+	/// Execute a parsed instruction. Assumes that no .Directive types will be
+	/// passed in.
     func executeInstruction(instruction: Instruction) {
         if self.trace {
-			print("\(instruction)\t\t\(instruction.numericEncoding.format(PrintOption.Binary.rawValue))")
+			if let encoding = instruction.numericEncoding {
+				print("\(instruction)\t\t\(encoding.format(PrintOption.Binary.rawValue))")
+			} else {
+				print("\(instruction)")
+			}
         }
-        // Update the program counter
-        let newPc = instruction.location + instruction.pcIncrement
-        self.currentPc = newPc
-        self.registers.set(pc.name, newPc)
-        
+		
+        // Update the current location
+        let newLocation = instruction.location + instruction.pcIncrement
+        self.currentWriteLocation = newLocation
+		self.registers.set(pc.name, newLocation)
+		
         switch(instruction.type) {
         case let .ALUR(op, dest, src1, src2):
             let src1Value = self.registers.get(src1.name)
@@ -480,10 +507,10 @@ class REPL {
                 destinationAddress = loc
             }
             if link {
-                self.registers.set(ra.name, self.currentPc)
+                self.registers.set(ra.name, self.currentTextLocation)
             }
             self.registers.set(pc.name, destinationAddress)
-            self.currentPc = destinationAddress
+            self.currentTextLocation = destinationAddress
         case let .Branch(op, link, src1, src2, dest):
             let reg1Value = self.registers.get(src1.name)
 			let src2Value: Int32
@@ -500,15 +527,14 @@ class REPL {
                     fatalError("Undefined label: \(dest)") // Not checked until execution to allow labels do be defined anywhere before running
                 }
                 if link {
-                    self.registers.set(ra.name, self.currentPc)
+                    self.registers.set(ra.name, self.currentTextLocation)
                 }
                 self.registers.set(pc.name, destinationAddress)
-                self.currentPc = destinationAddress
+                self.currentTextLocation = destinationAddress
             }
-        case .Directive(_, _):
-            // Abstract this away; large amount of parsing required
-            // Arguments are guaranteed to be valid, otherwise instruction generation would have failed
-            executeDirective(instruction)
+        case .Directive(_):
+			// Never reached, directives are always executed immediately
+			fatalError("Cannot execute directive as instruction.")
         case .Syscall:
             // Abstract this away; large amount of parsing required
             executeSyscall()
@@ -555,19 +581,20 @@ class REPL {
             print("Program terminated with exit code \(self.registers.get("$a0"))")
             self.executeCommand(.Exit)
         default:
-            print("Syscall code unimplemented: \(self.registers.get("$v0"))")
+			// Either actually invalid or just unimplemented
+            print("Invalid syscall code: \(self.registers.get("$v0"))")
         }
     }
 	
 	/// Execute an assembler directive.
     func executeDirective(instruction: Instruction) {
         if case let .Directive(directive, args) = instruction.type {
-            // Arguments, if any, are guaranteed to be valid here
+            // Arguments, if any, are guaranteed to be valid at this point
             switch(directive) {
             case .Text:
-                print("TODO: change to text segment")
+                self.writingData = false
             case .Data:
-                print("TODO: change to data segment")
+                self.writingData = true
             case .Global:
                 let label = args[0]
                 // If label is already defined, don't need to do anything
@@ -576,40 +603,36 @@ class REPL {
                     print("Undefined label: \(label) TODO implement")
                 }
             case .Align:
-                // Align current counter to a 2^n-byte boundary
-                let n = Int(args[0])!
-                switch(n) {
-                case 0:
-                    break
-                case 1:
-                    break
-                case 2:
-                    break
-                default:
-                    fatalError("Invalid alignment: \(n)")
-                }
+                // Align current counter to a 2^n-byte boundary; increment already calculated
+				self.currentWriteLocation += instruction.pcIncrement
             case .Space:
-                // Allocate n bytes
-                let n = Int(args[0])!
-                print("TODO: allocate \(n) bytes")
+                // Allocate n bytes, which essentially amounts to skipping forward n bytes
+				self.currentWriteLocation += instruction.pcIncrement
             case .Word:
                 let initialValues = args.map({ return Int32($0)! })
-                // TODO implement
-                print("Allocate space with values: \(initialValues)")
+				for value in initialValues {
+					self.memory[self.currentWriteLocation++] = value.unsignedHighest8()
+					self.memory[self.currentWriteLocation++] = value.unsignedHigher8()
+					self.memory[self.currentWriteLocation++] = value.unsignedLower8()
+					self.memory[self.currentWriteLocation++] = value.unsignedLowest8()
+				}
             case .Half:
                 let initialValues = args.map({ return Int16($0)! })
-                // TODO implement
-                print("Allocate space with values: \(initialValues)")
+				for value in initialValues {
+					self.memory[self.currentWriteLocation++] = value.unsignedUpper8()
+					self.memory[self.currentWriteLocation++] = value.unsignedLower8()
+				}
             case .Byte:
                 let initialValues = args.map({ return Int8($0)! })
-                // TODO implement
-                print("Allocate space with values: \(initialValues)")
-            case .Ascii:
-                let string = args[0]
-                print("Allocate string: \(string)")
-            case .Asciiz:
-                let string = args[0] + "\0"
-                print("Allocate string: \(string)")
+				for value in initialValues {
+					self.memory[self.currentWriteLocation++] = UInt8(bitPattern: value)
+				}
+            case .Ascii, .Asciiz:
+				let string = args[0] // Already has the null terminator if appropriate, sequences are escaped
+				for char in string.unicodeScalars {
+					let value = UInt8(char.value)
+					self.memory[self.currentWriteLocation++] = value
+				}
             }
         } else {
             fatalError("Attempting to execute illegal directive: \(instruction)")

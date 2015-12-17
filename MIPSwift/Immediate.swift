@@ -27,10 +27,24 @@ struct Immediate {
 	/// string is not a valid number that fits in a signed 16-bit
 	/// representation.
     init?(_ string: String) {
-        guard let immValue = Int16(string) else {
-            print("Unable to create immediate value from string: \(string)")
-            return nil
-        }
-        self.value = immValue
+		if let immValue = Int16(string) {
+			// This was a regular decimal number
+			self.value = immValue
+		} else if valid16BitHexRegex.test(string) {
+			// Attempt to read a hex value
+			let scanner = NSScanner(string: args[0])
+			let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+			defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+			if scanner.scanHexInt(pointer) {
+				// Safe to make an Int16 from this value; bit length already checked
+				self.value = Int16(truncatingBitPattern: pointer.memory)
+			} else {
+				print("Unable to create immediate value from string: \(string)")
+				return nil
+			}
+		} else {
+			print("Unable to create immediate value from string: \(string)")
+			return nil
+		}
     }
 }

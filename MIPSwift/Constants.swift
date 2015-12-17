@@ -14,9 +14,10 @@ import Foundation
 let mipswiftVersion = 1.0
 /// All valid command-line options.
 let commandLineOptions = "[-d] [-noae] [-f file]"
-/// The initial value of the program counter.
-let beginningPc: Int32 = 0x00400000
-/// The initial location of the data segment.
+/// The beginning location of the text segment. Also the initial value of the
+/// program counter.
+let beginningText: Int32 = 0x00400000
+/// The beginning location of the data segment.
 let beginningData: Int32 = 0x10000000
 /// The initial location of the stack pointer.
 let beginningSp: Int32 = 0x7FFFEB38
@@ -79,6 +80,9 @@ let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$")!
 /// A regular expression that matches only valid hexadecimal numbers that may be
 /// converted to a 32-bit number (1 to 8 hex characters).
 let valid32BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,8}$")!
+/// A regular expression that matches only valid hexadecimal numbers that may be
+/// converted to a 16-bit number (1 to 4 hex characters).
+let valid16BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,4}$")!
 
 // MARK: Instruction parsing constants
 

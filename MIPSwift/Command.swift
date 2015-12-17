@@ -153,7 +153,6 @@ enum Command {
 					location = .Right(args[0])
 				} else if valid32BitHexRegex.test(args[0]) {
 					// Attempt to read a hex value
-                    // To read a hex value
                     let scanner = NSScanner(string: args[0])
                     let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
                     defer { pointer.dealloc(1) } // Called when execution leaves the current scope

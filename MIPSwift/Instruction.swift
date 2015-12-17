@@ -178,10 +178,14 @@ class Instruction: CustomStringConvertible {
 	///
 	/// Format for J-type instructions:
 	/// oooo ooii iiii iiii iiii iiii iiii iiii
-	var numericEncoding: Int32 {
+	var numericEncoding: Int32? {
 		get {
 			if self.arguments.count == 0 {
-				return INT32_MAX
+				return nil
+			}
+			if case .Directive(_) = self.type {
+				// Directives have no encoded representation
+				return nil
 			}
 			
 			// TODO li - either decompose or...?
@@ -298,7 +302,7 @@ class Instruction: CustomStringConvertible {
 				encoding |= functionCode
 			default:
 				print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
-				return INT32_MAX
+				return nil
 			}
 			return encoding
 		}
@@ -393,6 +397,8 @@ class Instruction: CustomStringConvertible {
 		if args[0][0] == directiveDelimiter {
 			// MARK: Directive parsing
 			// Requires a significant amount of additional parsing to make sure arguments are in order
+			// Parsing runs under the assumption that this instruction will immediately be executed,
+			// even if the interpreter's execution is currently paused.
 			guard let dotDirective = DotDirective(rawValue: args[0]) else {
 				print("Invalid directive: \(args[0])")
 				return nil
@@ -401,7 +407,6 @@ class Instruction: CustomStringConvertible {
 			switch(dotDirective) {
 			case .Align:
 				// Align current address to be on a 2^n-byte boundary; 1 argument, must be 0, 1, or 2
-				pcIncrement = 0
 				if argCount != 1 {
 					print("Directive \(dotDirective.rawValue) expects 1 argument, got \(argCount).")
 					return nil
@@ -409,13 +414,17 @@ class Instruction: CustomStringConvertible {
 					print("Invalid alignment factor: \(args[1])")
 					return nil
 				}
+				let n = Int32(args[1])! // n is either 0, 1, or 2
+				let alignment = 1 << n // alignment is either 1, 2, or 4
+				let offset = location % alignment
+				pcIncrement = offset == 0 ? 0 : alignment - offset
 			case .Data, .Text:
 				// Change to data segment (address may be supplied; unimplemented as of now)
-				pcIncrement = 0
 				if argCount != 0 {
 					print("Directive \(dotDirective.rawValue) expects 0 arguments, got \(argCount).")
 					return nil
 				}
+				pcIncrement = 0
 			case .Global:
 				// Declare a global label; 1 argument
 				pcIncrement = 0
@@ -427,33 +436,41 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 			case .Ascii, .Asciiz:
-				// Allocate space for a string (without null terminator); 1 argument, though it may have been split by paring above
+				// Interesting problem:
+				// .asciiz		"This is the string."		# This " confuses things
+				// .asciiz		"This is the # string."		# Doesn't confuse things, but comment is thought to begin at first hashtag
+				// Allocate space for a string; 1 argument, though it may have been split by parsing above, so it needs to be reassembled
 				if argCount == 0 {
+					// Can't just check argCount != 1 because the string may have been split up above
 					print("Directive \(dotDirective.rawValue) expects 1 argument, got 0.")
 					return nil
-				} else {
-					// Need to ensure that the whitespace from the original instruction's argument isn't lost
-					guard let stringBeginningRange = string.rangeOfString(stringLiteralDelimiter) else {
-						print("Directive \(dotDirective.rawValue) expects string literal.")
-						return nil
-					}
-					guard let stringEndRange = string.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex else {
-						print("String literal expects closing delimiter.")
-						return nil
-					}
-					let rawArgument = string.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
-					let directivePart = string[string.startIndex..<stringBeginningRange.endIndex]
-					if directivePart.characters.count + rawArgument.characters.count + 1 != string.characters.count {
-						// There is trailing stuff after the string literal is closed, don't allow this
-						print("Invalid data after string literal: \(string[stringEndRange.endIndex..<string.endIndex])")
-						return nil
-					}
-					guard let escapedArgument = try? rawArgument.toEscapedString() else {
-						return nil // Couldn't escape this string
-					}
-					pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + (dotDirective == .Asciiz ? 1 : 0)) // Add 1 for null terminator if needed
-					arguments = [args[0], escapedArgument]
 				}
+				// Need to ensure that the whitespace from the original instruction's argument isn't lost
+				guard let stringBeginningRange = string.rangeOfString(stringLiteralDelimiter) else {
+					print("Directive \(dotDirective.rawValue) expects string literal.")
+					return nil
+				}
+				guard let stringEndRange = string.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex else {
+					print("String literal expects closing delimiter.")
+					return nil
+				}
+				let rawArgument = string.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
+				let directivePart = string[string.startIndex..<stringBeginningRange.endIndex]
+				if directivePart.characters.count + rawArgument.characters.count + 1 != string.characters.count {
+					// There is trailing stuff after the string literal is closed, check if it's a comment
+					let trailingStuff = string[stringEndRange.endIndex..<string.endIndex]
+					if trailingStuff.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet()).hasPrefix(commentDelimiter) {
+						// Trailing stuff is just a comment, allow this
+					} else {
+						print("Invalid data after string literal: \(trailingStuff)")
+						return nil
+					}
+				}
+				guard let escapedArgument = try? rawArgument.toEscapedString() else {
+					return nil // Couldn't escape this string
+				}
+				pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + (dotDirective == .Asciiz ? 1 : 0)) // Add 1 for null terminator if needed
+				arguments = [args[0], escapedArgument + (dotDirective == .Asciiz ? "\0" : "")]
 			case .Space:
 				// Allocate n bytes
 				if argCount != 1 {
@@ -471,14 +488,30 @@ class Instruction: CustomStringConvertible {
 					print("Directive \(dotDirective.rawValue) expects arguments, got none.")
 					return nil
 				}
-				// Ensure every argument can be transformed to an 8-bit integer
+				// Ensure the location that these values will be written to is aligned
+				let bytesPerArgument: Int32 = (dotDirective == .Byte ? 1 : (dotDirective == .Half ? 2 : 4))
+				if location % bytesPerArgument != 0 {
+					// This is an unaligned address for this data size
+					print("Directive \(dotDirective.rawValue) must be on a memory address of alignment \(bytesPerArgument).")
+					return nil
+				}
+				// Ensure every argument can be transformed to an appropriately sized integer
 				var validArgs = true
-				args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+				switch(dotDirective) {
+				case .Byte:
+					args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+				case .Half:
+					args[1..<args.count].forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+				case .Word:
+					args[1..<args.count].forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+				default:
+					// Never reached
+					fatalError("Invalid dot directive: \(dotDirective.rawValue)")
+				}
 				if !validArgs {
 					return nil
 				}
-				let bytesPerArgument = (dotDirective == .Byte ? 1 : (dotDirective == .Half ? 2 : 4))
-				pcIncrement = Int32(argCount*bytesPerArgument)
+				pcIncrement = Int32(argCount)*bytesPerArgument
 			}
 			let directive = Instruction(rawString: string, location: location, pcIncrement: pcIncrement, arguments: arguments, labels: labels, comment: comment, type: .Directive(directive: dotDirective, args: Array(arguments[1..<arguments.count])))
 			return [directive]
