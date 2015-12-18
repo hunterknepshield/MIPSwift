@@ -109,19 +109,38 @@ class REPL {
 							dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
 							return
 						}
-						inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
-						// Attempt to resolve dependencies
+						
+						// Store newly defined labels in the dictionary, resolving any previously unresolved dependencies if possible
+						inst.labels.forEach({ label in
+							labelsToLocations[label] = inst.location
+							if let unresolvedArray = unresolvedInstructions[label] {
+								// There are existing instructions that depend on this label
+								unresolvedArray.forEach({ unresolved in
+									unresolved.resolveDependency(label, location: inst.location)
+								})
+								unresolvedInstructions[label] = nil
+							}
+						})
+						
+						// Attempt to resolve dependencies that this instruction has
 						let unresolved = inst.unresolvedDependencies
-						unresolved.forEach({
-							if let loc = labelsToLocations[$0] {
-								// Know the location of this label
-								print("Can be resolved: \($0) to \(loc)")
-								inst.resolveDependency($0, location: loc)
+						unresolved.forEach({ label in
+							if let loc = labelsToLocations[label] {
+								// Know the location of this label already
+								inst.resolveDependency(label, location: loc)
 							} else {
-								// Don't yet know the label of this location; pause execution
-								print("As-of-yet unresolved dependency: \($0)")
-								print("Execution will be paused. Attempting to resume execution before all dependencies are resolved may cause undefined behavior.")
-								// TODO stuff with unresolvedInstructions, pausing
+								// Don't yet know the location of this label yet; pause execution to avoid issues
+								print("As-of-yet unresolved dependency: \(label)")
+								if !self.usingFile {
+									// If a file is being read, the label is likely defined elsewhere already
+									print("Execution will be paused. Attempting to resume execution before all dependencies are resolved may cause undefined behavior.")
+									// TODO pause
+								}
+								if let existingUnresolved = unresolvedInstructions[label] {
+									unresolvedInstructions[label] = existingUnresolved + [inst]
+								} else {
+									unresolvedInstructions[label] = [inst]
+								}
 							}
 						})
 						switch(inst.type) {
@@ -157,7 +176,7 @@ class REPL {
 							locationsToInstructions[self.currentWriteLocation] = inst
 							let newPc = self.currentWriteLocation + inst.pcIncrement
 							self.currentWriteLocation = newPc
-							// TODO possibly write inst.numericEncoding to memory[self.currentWriteLocation..<self.currentWriteLocation + 4] once all pseudo instructions are properly decoded?
+							// TODO possibly write inst.numericEncoding to memory[self.currentWriteLocation..<self.currentWriteLocation + 4]?
 							
 							if self.autoexecute {
 								executeInstruction(inst)
@@ -517,18 +536,16 @@ class REPL {
             switch(dest) {
             case .Left(let reg):
                 destinationAddress = self.registers.get(reg.name)
-            case .Right(let label):
-                guard let loc = labelsToLocations[label] else {
-                    fatalError("Undefined label: \(label)") // Not checked until execution to allow labels do be defined anywhere before running
-                }
-                destinationAddress = loc
+            case .Right(let addr):
+                destinationAddress = addr << 2
             }
             if link {
                 self.registers.set(ra.name, self.currentTextLocation)
             }
             self.registers.set(pc.name, destinationAddress)
             self.currentTextLocation = destinationAddress
-        case let .Branch(op, link, src1, src2, dest):
+			// TODO resume execution at new location
+        case let .Branch(op, link, src1, src2, offset):
             let reg1Value = self.registers.get(src1.name)
 			let src2Value: Int32
 			if src2 != nil {
@@ -540,14 +557,13 @@ class REPL {
 			}
             if op(reg1Value, src2Value) {
                 // Take this branch
-                guard let destinationAddress = labelsToLocations[dest] else {
-                    fatalError("Undefined label: \(dest)") // Not checked until execution to allow labels do be defined anywhere before running
-                }
+				let destinationAddress = instruction.location + (offset.signExtended << 2) - (instruction.pcIncrement)
                 if link {
                     self.registers.set(ra.name, self.currentTextLocation)
                 }
                 self.registers.set(pc.name, destinationAddress)
                 self.currentTextLocation = destinationAddress
+				// TODO resume execution at new location
             }
         case .Directive(_):
 			// Never reached, directives are always executed immediately
@@ -578,11 +594,11 @@ class REPL {
             print(self.registers.get("$a0"))
         case .PrintString:
             // Print the string that starts at address $a0 and go until '\0' (0x00) is found
-            let address = self.registers.get("$a0")
+            var address = self.registers.get("$a0")
 			var charValue = self.memory[address] ?? 0
 			while charValue != 0 {
 				print(UnicodeScalar(charValue), terminator: "")
-				charValue = self.memory[address] ?? 0
+				charValue = self.memory[++address] ?? 0
 			}
         case .ReadInt:
             // Read an integer from standard input and return it in $v0

@@ -23,6 +23,10 @@ let beginningData: Int32 = 0x10000000
 let beginningSp: Int32 = 0x7FFFEB38
 /// The file handle associated with keyboard/standard input.
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
+/// An immediate with value 0xABCD, to represent an uninitialized value within
+/// an instruction; makes memory dump reading simpler to find unresolved
+/// instructions. Binary encoding: 1010101111001101
+let abcd = Immediate.parseString("0xABCD", canReturnTwo: false)!.0
 
 // MARK: Register parsing constants
 

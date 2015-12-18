@@ -49,8 +49,8 @@ enum InstructionType {
 	///		- op: This instruction wraps a function that always generates
 	///		a 32-bit result.
 	///		- dest: The destination register of the instruction.
-	///		- src1: The first source for the instruction.
-	///		- src2: The second source for the instruction.
+	///		- src1: The first source for the instruction, a register.
+	///		- src2: The second source for the instruction, an immediate value.
 	case ALUI(op: Operation32, dest: Register, src1: Register, src2: Immediate)
 	/// A memory instruction that calculates an effective address in memory and
 	/// loads or stores data from that address into or from a register.
@@ -65,15 +65,14 @@ enum InstructionType {
 	///		- offset: The offset for calculation of the effective address.
 	///		- addr: The register for calculation of the effective address.
 	case Memory(storing: Bool, size: Int, memReg: Register, offset: Immediate, addr: Register)
-	/// An unconditional jump instruction. Technically, J-type instructions
-	/// store a 26-bit integer offset from the current program counter.
+	/// An unconditional jump instruction.
 	///
 	/// - Parameters:
 	///		- link: Used to determine if this instruction links the current
 	///		program counter into $ra or not.
-	///		- dest: The destination for the jump; may be the value of a register
-	///		or the location of a label.
-	case Jump(link: Bool, dest: Either<Register, String>) // TODO change String to Int32 (26 bits)
+	///		- dest: The destination register or address for the jump (must be
+	///		right-shifted by 2 to be valid).
+	case Jump(link: Bool, dest: Either<Register, Int32>)
 	/// A conditional branch instruction.
 	///
 	/// - Parameters:
@@ -83,8 +82,9 @@ enum InstructionType {
 	///		- src1: The first source for the instruction.
 	///		- src2: The second source for the instruction, nil if comparing with
 	///		zero.
-	///		- dest: The destination label to jump to if this branch is taken.
-	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register?, dest: String) // TODO change to Int32
+	///		- dest: The offset from the current address to jump to if this
+	///		branch is taken.
+	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register?, dest: Immediate)
 	/// A system call. This instruction type is used to allow the assembly
 	/// program to do system-level things like read input and print.
 	///
@@ -253,10 +253,11 @@ class Instruction: CustomStringConvertible {
 						return INT32_MAX
 					}
 					encoding |= functionCode
-				case .Right(let label):
+				case .Right(let address):
 					// This is a true J-type
-					// TODO figure out a way to calculate the 26-bit offset's value
-					print("Problem D: \(label)")
+					// Format for J-type instructions:
+					// oooo ooii iiii iiii iiii iiii iiii iiii
+					encoding |= address & 0x03FFFFFF // Only want 26 bits
 				}
 			case let .Branch(_, _, src1, src2, dest):
 				// Again don't know how to generate offset without information from the outside world
@@ -292,8 +293,7 @@ class Instruction: CustomStringConvertible {
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
-				// TODO figure out a way to get the lowest 16 bits (offset)
-				print("Problem D: \(dest)")
+				encoding |= dest.unsignedExtended.signed()
 				break
 			case .Syscall:
 				// Technically an R-type instruction; everything but function code is 0
@@ -335,7 +335,46 @@ class Instruction: CustomStringConvertible {
 	///		an offset instead of a full address, then it will be determined
 	///		within this function.
 	func resolveDependency(dependency: String, location: Int32) {
-		print("\(self) - resolve \(dependency) to \(location)")
+		switch(self.type) {
+		case let .Jump(link, _):
+			// Overwrite dest with a new value
+			self.arguments[1] = (location >> 2).toHexWith0x()
+			self.type = .Jump(link: link, dest: .Right(location >> 2))
+			// Instructions are always aligned to a 4-byte boundary, so the address can safely be shifted down 2 here
+			// without losing any information; just need to bitshift back up on the way out during execution
+		case let .Branch(op, link, src1, src2, _):
+			// Overwrite dest with a new value, an offset from the current location
+			let offset = location - self.location
+			let newImm = Immediate(Int16(truncatingBitPattern: offset >> 2))
+			// Instructions are always aligned to a 4-byte boundary, so the offset can safely be shifted down 2 here
+			// without losing any information; just need to bitshift back up on the way out during execution
+			print("Offset: \(offset)")
+			self.arguments[3] = "\(newImm.value)"
+			self.type = .Branch(op: op, link: link, src1: src1, src2: src2, dest: newImm)
+		case let .ALUI(op, dest, src1, _):
+			// This comes from the la instruction, which is decomposed into a lui and ori combination
+			// Overwrite src2 with a new value depending on which instruction this is
+			let newImm: Immediate
+			switch(self.arguments[0]) {
+			case "lui":
+				// Want the upper 16 bits of the value
+				newImm = Immediate(Int16(truncatingBitPattern: location >> 16))
+				self.arguments[2] = "\(newImm.value)"
+				// lui syntax has 2 arguments, not 3: lui	dest, imm
+			case "ori":
+				// Want the lower 16 bits of the value
+				newImm = Immediate(Int16(truncatingBitPattern: location & 0xFFFF))
+				self.arguments[3] = "\(newImm.value)"
+				// ori syntax has 3 arguments like normal: ori	dest, src, imm
+			default:
+				fatalError("Invalid instruction for resolving dependency: \(self)")
+			}
+			self.type = .ALUI(op: op, dest: dest, src1: src1, src2: newImm)
+		default:
+			// Should never happen
+			fatalError("Invalid instruction for resolving dependency: \(self)")
+		}
+		self.unresolvedDependencies.removeAtIndex(self.unresolvedDependencies.indexOf(dependency)!)
 	}
 	
 	/// Initialize one or multiple instructions from a given input string,
@@ -686,7 +725,7 @@ class Instruction: CustomStringConvertible {
 				print("Invalid label: \(args[1])")
 				return nil
 			}
-			type = .Jump(link: args[0] == "jal", dest: .Right(args[1])) // TODO change type tp .Right(0)
+			type = .Jump(link: args[0] == "jal", dest: .Right(abcd.signExtended))
 			let jump = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			jump.unresolvedDependencies.append(args[1])
 			return [jump]
@@ -710,7 +749,7 @@ class Instruction: CustomStringConvertible {
 			guard validLabelRegex.test(args[3]), let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: args[3])
+			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: abcd)
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			equal.unresolvedDependencies.append(args[3])
 			return [equal]
@@ -737,12 +776,13 @@ class Instruction: CustomStringConvertible {
 			default:
 				fatalError("Invalid branch instruction \(args[0])")
 			}
-			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: args[2])
+			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: abcd)
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			compare.unresolvedDependencies.append(args[2])
 			return [compare]
 		// MARK: More complex/pseudo instruction parsing
 		case "li":
+			// Pseudo instruction to load a 32-bit immediate into a register
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
@@ -750,6 +790,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), src = Immediate.parseString(args[2], canReturnTwo: true) else {
 				return nil
 			}
+			// Determine what to load into the upper 16 bits of the register, will be 0 if the immediate isn't larger than 16 bits
 			let src2: Int16
 			if src.1 != nil {
 				src2 = src.1!.value
@@ -759,8 +800,29 @@ class Instruction: CustomStringConvertible {
 			// This must be decomposed into two instructions, since the immediate may be 32 bits
 			// lui	dest, src.upper
 			let lui = Instruction.parseString("lui " + args[1] + ", \(src2)", location: location, verbose: false)![0]
+			lui.labels = labels
+			lui.comment = comment
 			// ori	dest, dest, src.lower
 			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(src.0.value)", location: location + 4, verbose: false)![0]
+			return [lui, ori]
+		case "la":
+			// Pseudo instruction to load a 32-bit address of a label into a register
+			if argCount != 2 {
+				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+				return nil
+			}
+			guard validLabelRegex.test(args[2]), let _ = Register(args[1], writing: true) else {
+				return nil
+			}
+			// This must be decomposed into two instructions, since addresses are always 32 bits
+			// lui	dest, src.upper
+			let lui = Instruction.parseString("lui " + args[1] + ", \(abcd.value)", location: location, verbose: false)![0]
+			lui.unresolvedDependencies.append(args[2])
+			lui.labels = labels
+			lui.comment = comment
+			// ori	dest, dest, src.lower
+			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(abcd.value)", location: location + 4, verbose: false)![0]
+			ori.unresolvedDependencies.append(args[2])
 			return [lui, ori]
 		case "move":
 			// Pseudo instruction, transforms to
@@ -773,6 +835,8 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			let add = Instruction.parseString("add " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			add.labels = labels
+			add.comment = comment
 			return [add]
 		case "not":
 			// Pseudo instruction, transforms to
@@ -785,6 +849,8 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			let nor = Instruction.parseString("nor " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			nor.labels = labels
+			nor.comment = comment
 			return [nor]
 		case "clear":
 			// Pseudo instruction, transforms to
@@ -797,6 +863,8 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			let add = Instruction.parseString("add " + args[1] + ", $zero, $zero", location: location, verbose: false)![0]
+			add.labels = labels
+			add.comment = comment
 			return [add]
 		case "mfhi", "mflo":
 			if argCount != 1 {
