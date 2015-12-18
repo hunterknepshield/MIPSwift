@@ -110,6 +110,20 @@ class REPL {
 							return
 						}
 						inst.labels.forEach({ labelsToLocations[$0] = inst.location }) // Store labels in the dictionary
+						// Attempt to resolve dependencies
+						let unresolved = inst.unresolvedDependencies
+						unresolved.forEach({
+							if let loc = labelsToLocations[$0] {
+								// Know the location of this label
+								print("Can be resolved: \($0) to \(loc)")
+								inst.resolveDependency($0, location: loc)
+							} else {
+								// Don't yet know the label of this location; pause execution
+								print("As-of-yet unresolved dependency: \($0)")
+								print("Execution will be paused. Attempting to resume execution before all dependencies are resolved may cause undefined behavior.")
+								// TODO stuff with unresolvedInstructions, pausing
+							}
+						})
 						switch(inst.type) {
 						case .NonExecutable:
 							// This line contained only labels and/or comments; don't execute anything.
@@ -323,13 +337,13 @@ class REPL {
             // Toggle current auto-dump setting
             self.autodump = !self.autodump
             print("Auto-dump \(self.autodump ? "enabled" : "disabled").")
-        case .Exit:
+        case .Exit(let code):
             print("Exiting MIPSwift.")
             if self.usingFile {
                 self.inputSource.closeFile()
             }
             stdIn.closeFile()
-            exit(0)
+            exit(code)
         case .Verbose:
             // Toggle current verbosity setting
             self.verbose = !self.verbose
@@ -582,11 +596,11 @@ class REPL {
         case .Exit:
             // The assembly program has exited, so exit the interpreter as well
             print("Program terminated with exit code 0.")
-            self.executeCommand(.Exit)
+			self.executeCommand(.Exit(code: 0))
         case .Exit2:
             // The assembly program has exited with exit code in $a0
             print("Program terminated with exit code \(self.registers.get("$a0"))")
-            self.executeCommand(.Exit)
+			self.executeCommand(.Exit(code: self.registers.get("$a0")))
         default:
 			// Either actually invalid or just unimplemented
             print("Invalid syscall code: \(self.registers.get("$v0"))")

@@ -73,7 +73,7 @@ enum InstructionType {
 	///		program counter into $ra or not.
 	///		- dest: The destination for the jump; may be the value of a register
 	///		or the location of a label.
-	case Jump(link: Bool, dest: Either<Register, String>)
+	case Jump(link: Bool, dest: Either<Register, String>) // TODO change String to Int32 (26 bits)
 	/// A conditional branch instruction.
 	///
 	/// - Parameters:
@@ -84,7 +84,7 @@ enum InstructionType {
 	///		- src2: The second source for the instruction, nil if comparing with
 	///		zero.
 	///		- dest: The destination label to jump to if this branch is taken.
-	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register?, dest: String)
+	case Branch(op: OperationBool, link: Bool, src1: Register, src2: Register?, dest: String) // TODO change to Int32
 	/// A system call. This instruction type is used to allow the assembly
 	/// program to do system-level things like read input and print.
 	///
@@ -335,7 +335,7 @@ class Instruction: CustomStringConvertible {
 	///		an offset instead of a full address, then it will be determined
 	///		within this function.
 	func resolveDependency(dependency: String, location: Int32) {
-		
+		print("\(self) - resolve \(dependency) to \(location)")
 	}
 	
 	/// Initialize one or multiple instructions from a given input string,
@@ -682,8 +682,13 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
 				return nil
 			}
-			type = .Jump(link: args[0] == "jal", dest: .Right(args[1]))
+			if !validLabelRegex.test(args[1]) {
+				print("Invalid label: \(args[1])")
+				return nil
+			}
+			type = .Jump(link: args[0] == "jal", dest: .Right(args[1])) // TODO change type tp .Right(0)
 			let jump = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
+			jump.unresolvedDependencies.append(args[1])
 			return [jump]
 		case "jr", "jalr":
 			if argCount != 1 {
@@ -702,18 +707,19 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
+			guard validLabelRegex.test(args[3]), let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
 			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: args[3])
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
+			equal.unresolvedDependencies.append(args[3])
 			return [equal]
 		case "bgez", "bgezal", "bltz", "bltzal", "bgtz", "bltez":
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
 			}
-			guard let src1 = Register(args[1], writing: false) else {
+			guard validLabelRegex.test(args[2]), let src1 = Register(args[1], writing: false) else {
 				return nil
 			}
 			let link = args[0] == "bgezal" || args[0] == "blzal"
@@ -733,6 +739,7 @@ class Instruction: CustomStringConvertible {
 			}
 			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: args[2])
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
+			compare.unresolvedDependencies.append(args[2])
 			return [compare]
 		// MARK: More complex/pseudo instruction parsing
 		case "li":

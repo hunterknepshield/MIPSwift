@@ -70,7 +70,9 @@ enum Command {
 	/// - Parameter file: The file name to be opened.
 	case UseFile(file: String)
 	/// Exit the interpreter.
-    case Exit
+	///
+	/// - Parameter code: The code with which to exit.
+	case Exit(code: Int32)
 	
     /// Construct a Command from an input string. May fail if the command or its
 	/// necessary arguments are invalid.
@@ -233,7 +235,7 @@ enum Command {
                 self = .UseFile(file: args[0])
             }
         case "exit", "quit", "q":
-            self = .Exit
+			self = .Exit(code: 0)
         default:
 			return nil
         }
