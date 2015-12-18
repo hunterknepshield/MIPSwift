@@ -18,6 +18,9 @@ class REPL {
     var labelsToLocations = [String : Int32]()
 	/// Maps locations in memory to instructions.
     var locationsToInstructions = [Int32 : Instruction]()
+	/// Keeps track of any instructions that have as-of-yet resolved label
+	/// dependencies. For example, j label when label has yet to be defined.
+	var unresolvedInstructions = [String: [Instruction]]()
 	/// Maps locations in memory to individual bytes.
     var memory = [Int32 : UInt8]()
 	/// The current value of the program counter. Used to avoid constantly
@@ -445,7 +448,7 @@ class REPL {
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
                 print("Unaligned memory address: \(address.toHexWith0x())")
-                // TODO disallow
+				break // TODO terminate here in the future?
             }
             if storing {
                 // Storing the value in memReg to memory
@@ -560,9 +563,13 @@ class REPL {
             // Print the integer currently in $a0
             print(self.registers.get("$a0"))
         case .PrintString:
-            // Print the string that starts at address $a0 and go until '\0' is found
+            // Print the string that starts at address $a0 and go until '\0' (0x00) is found
             let address = self.registers.get("$a0")
-            print("TODO: read string at \(address)")
+			var charValue = self.memory[address] ?? 0
+			while charValue != 0 {
+				print(UnicodeScalar(charValue), terminator: "")
+				charValue = self.memory[address] ?? 0
+			}
         case .ReadInt:
             // Read an integer from standard input and return it in $v0
             // Maximum of 2147483647, minimum of -2147483648

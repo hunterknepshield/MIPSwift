@@ -122,8 +122,13 @@ class Instruction: CustomStringConvertible {
     var labels = [String]()
 	/// The parsed comment of this instruction, if there was one.
     var comment: String?
+	/// Any potentially unresolved dependencies, like labels, that need more
+	/// information to make this instruction complete. For example, `la	$t0,
+	/// undefined_label` will not be considered executable until undefined_label
+	/// is actually defined, at which point this dependency will be resolved.
+	var unresolvedDependencies = [String]()
 	/// The final parsed representation of the instruction.
-    let type: InstructionType
+    var type: InstructionType
 	/// The 'pretty' formatting of this instruction's arguments.
     var instructionString: String? {
         get {
@@ -187,9 +192,6 @@ class Instruction: CustomStringConvertible {
 				// Directives have no encoded representation
 				return nil
 			}
-			
-			// TODO li - either decompose or...?
-			
 			let oShift: Int32 = 26 // Number of bits to shift the opcode in
 			let sShift: Int32 = 21 // Number of bits to shift the s register in
 			let tShift: Int32 = 16 // Number of bits to shift the t register in
@@ -290,7 +292,7 @@ class Instruction: CustomStringConvertible {
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
-				// TODO figure out a way to get the lowest 16 bits
+				// TODO figure out a way to get the lowest 16 bits (offset)
 				print("Problem D: \(dest)")
 				break
 			case .Syscall:
@@ -320,6 +322,20 @@ class Instruction: CustomStringConvertible {
 		self.labels = labels
 		self.comment = comment
 		self.type = type
+	}
+	
+	/// Resolve dependencies (some or all) that this instruction has. For
+	/// example, `la	$t0, undefined_label` needs to know the location of
+	/// undefined_label to be considered fully resolved, at which point,
+	/// self.unresolvedDependencies will have count 0.
+	///
+	/// - Parameters:
+	///		- dependency: One of the labels that this instruction depends on.
+	///		- location: The raw location of this label. If this instruction uses
+	///		an offset instead of a full address, then it will be determined
+	///		within this function.
+	func resolveDependency(dependency: String, location: Int32) {
+		
 	}
 	
 	/// Initialize one or multiple instructions from a given input string,
@@ -607,10 +623,10 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
+			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate.parseString(args[3], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }, dest: dest, src1: src1, src2: src2)
+			type = .ALUI(op: args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }, dest: dest, src1: src1, src2: src2.0)
 			let addi = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [addi]
 		case "andi", "ori", "xori":
@@ -618,10 +634,10 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
+			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate.parseString(args[3], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: args[0] == "andi" ? (&) : (args[0] == "ori" ? (|) : (^)), dest: dest, src1: src1, src2: src2)
+			type = .ALUI(op: args[0] == "andi" ? (&) : (args[0] == "ori" ? (|) : (^)), dest: dest, src1: src1, src2: src2.0)
 			let bitwisei = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [bitwisei]
 		case "slti", "sltiu":
@@ -629,10 +645,10 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate(args[3]) else {
+			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate.parseString(args[3], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }, dest: dest, src1: src1, src2: src2)
+			type = .ALUI(op: args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }, dest: dest, src1: src1, src2: src2.0)
 			let slti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [slti]
 		case "lui":
@@ -640,10 +656,10 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src = Immediate(args[2]) else {
+			guard let dest = Register(args[1], writing: true), src = Immediate.parseString(args[2], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: { return $1 << 16 }, dest: dest, src1: zero, src2: src)
+			type = .ALUI(op: { return $1 << 16 }, dest: dest, src1: zero, src2: src.0)
 			let lui = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [lui]
 		// MARK: Memory instruction parsing
@@ -654,10 +670,10 @@ class Instruction: CustomStringConvertible {
 			}
 			let storing = args[0][0] == "s"
 			let size = args[0][1] == "b" ? 0 : args[0][1] == "h" ? 1 : 2
-			guard let memReg = Register(args[1], writing: !storing), offset = Immediate(args[2]), addr = Register(args[3], writing: false) else {
+			guard let memReg = Register(args[1], writing: !storing), offset = Immediate.parseString(args[2], canReturnTwo: false), addr = Register(args[3], writing: false) else {
 				return nil
 			}
-			type = .Memory(storing: storing, size: size, memReg: memReg, offset: offset, addr: addr)
+			type = .Memory(storing: storing, size: size, memReg: memReg, offset: offset.0, addr: addr)
 			let memory = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [memory]
 		// MARK: Jump instruction parsing
@@ -720,30 +736,61 @@ class Instruction: CustomStringConvertible {
 			return [compare]
 		// MARK: More complex/pseudo instruction parsing
 		case "li":
-			// Pseudo instruction that gets converted to lui $at [imm&0xFFFF0000] and ori [dest] $at [imm&0xFFFF]
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src = Immediate(args[2]) else {
+			guard let _ = Register(args[1], writing: true), src = Immediate.parseString(args[2], canReturnTwo: true) else {
 				return nil
 			}
-			type = .ALUI(op: (+), dest: dest, src1: zero, src2: src)
-			let li = Instruction(rawString: string, location: location, pcIncrement: 8, arguments: arguments, labels: labels, comment: comment, type: type)
-			return [li]
+			let src2: Int16
+			if src.1 != nil {
+				src2 = src.1!.value
+			} else {
+				src2 = 0
+			}
+			// This must be decomposed into two instructions, since the immediate may be 32 bits
+			// lui	dest, src.upper
+			let lui = Instruction.parseString("lui " + args[1] + ", \(src2)", location: location, verbose: false)![0]
+			// ori	dest, dest, src.lower
+			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(src.0.value)", location: location + 4, verbose: false)![0]
+			return [lui, ori]
 		case "move":
 			// Pseudo instruction, transforms to
-			// add	dest, $0, src
+			// add	dest, src, $0
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src = Register(args[2], writing: false) else {
+			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Left(+), dest: dest, src1: src, src2: .Left(zero))
-			let move = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			return [move]
+			let add = Instruction.parseString("add " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			return [add]
+		case "not":
+			// Pseudo instruction, transforms to
+			// nor	dest, src, $0
+			if argCount != 2 {
+				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+				return nil
+			}
+			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
+				return nil
+			}
+			let nor = Instruction.parseString("nor " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			return [nor]
+		case "clear":
+			// Pseudo instruction, transforms to
+			// add	dest, $0, $0
+			if argCount != 1 {
+				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+				return nil
+			}
+			guard let _ = Register(args[1], writing: true) else {
+				return nil
+			}
+			let add = Instruction.parseString("add " + args[1] + ", $zero, $zero", location: location, verbose: false)![0]
+			return [add]
 		case "mfhi", "mflo":
 			if argCount != 1 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
@@ -772,35 +819,17 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			if args[3].rangeOfString(registerDelimiter) != nil {
-				// Second source is a register
-				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
-					return nil
-				}
-				// Decompose into 2 instructions
-				// mult	src1, src2
-				let mult = Instruction.parseString("mult " + args[2] + ", " + args[3], location: location, verbose: false)![0]
-				mult.labels = labels
-				mult.comment = comment
-				// mflo	dest
-				let mflo = Instruction.parseString("mflo " + args[1], location: location + 4, verbose: false)![0]
-				return [mult, mflo]
-			} else {
-				// Second source is an immediate
-				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Immediate(args[3]) else {
-					return nil
-				}
-				// Decompose into 3 instructions
-				// li	$at, src2
-				let li = Instruction.parseString("li $at," + args[3], location: location, verbose: false)![0]
-				li.labels = labels
-				li.comment = comment
-				// mult	src1, $at
-				let mult = Instruction.parseString("mult " + args[2] + ", $at", location: location + 4, verbose: false)![0]
-				// mflo	dest
-				let mflo = Instruction.parseString("mflo " + args[1], location: location + 8, verbose: false)![0]
-				return [li, mult, mflo]
+			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
+				return nil
 			}
+			// Decompose into 2 instructions
+			// mult	src1, src2
+			let mult = Instruction.parseString("mult " + args[2] + ", " + args[3], location: location, verbose: false)![0]
+			mult.labels = labels
+			mult.comment = comment
+			// mflo	dest
+			let mflo = Instruction.parseString("mflo " + args[1], location: location + 4, verbose: false)![0]
+			return [mult, mflo]
 		case "div" where argCount != 3, "divu":
 			// Catches only the real div instruction, which puts $0/$1 in lo, $0%$1 in hi
 			if argCount != 2 {
@@ -819,35 +848,17 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			if args[3].rangeOfString(registerDelimiter) != nil {
-				// Second source is a register
-				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
-					return nil
-				}
-				// Decompose this into 2 instructions
-				// div	src1, src2
-				let div = Instruction.parseString("div " + args[2] + ", " + args[3], location: location, verbose: false)![0]
-				div.labels = labels
-				div.comment = comment
-				// mflo	dest/mfhi dest, depending on the pseudo instruction
-				let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + 4, verbose: false)![0]
-				return [div, move]
-			} else {
-				// Second source is an immediate
-				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Immediate(args[3]) else {
-					return nil
-				}
-				// Decompose into 3 instructions
-				// li	$at, src2
-				let li = Instruction.parseString("li $at," + args[3], location: location, verbose: false)![0]
-				li.labels = labels
-				li.comment = comment
-				// div	src1, $at
-				let div = Instruction.parseString("div " + args[2] + ", $at", location: location + 4, verbose: false)![0]
-				// mflo	dest/mfhi dest, depending on the pseudo instruction
-				let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + 8, verbose: false)![0]
-				return [li, div, move]
+			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
+				return nil
 			}
+			// Decompose this into 2 instructions
+			// div	src1, src2
+			let div = Instruction.parseString("div " + args[2] + ", " + args[3], location: location, verbose: false)![0]
+			div.labels = labels
+			div.comment = comment
+			// mflo	dest/mfhi dest, depending on the pseudo instruction
+			let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + 4, verbose: false)![0]
+			return [div, move]
 		default:
 			return nil
 		}

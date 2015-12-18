@@ -19,32 +19,51 @@ struct Immediate {
 	var unsignedExtended: UInt32 { get { return UInt32(UInt16(bitPattern: self.value)) } }
     
     /// Initialize an immediate value from an integer.
-    init(value: Int16) {
+    init(_ value: Int16) {
         self.value = value
     }
-    
-    /// Attempt to initialize an immediate value from a string. May fail if the
-	/// string is not a valid number that fits in a signed 16-bit
+	
+	/// Attempt to initialize an immediate value from a string. May fail if the
+	/// string is not a valid number, but will return two distinct values if the
+	/// value supplied fits in a 32-bit representation, but not a 16-bit
 	/// representation.
-    init?(_ string: String) {
+	static func parseString(string: String, canReturnTwo: Bool) -> (lower: Immediate, upper: Immediate?)? {
 		if let immValue = Int16(string) {
-			// This was a regular decimal number
-			self.value = immValue
-		} else if valid16BitHexRegex.test(string) {
-			// Attempt to read a hex value
-			let scanner = NSScanner(string: args[0])
-			let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-			defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-			if scanner.scanHexInt(pointer) {
-				// Safe to make an Int16 from this value; bit length already checked
-				self.value = Int16(truncatingBitPattern: pointer.memory)
+			// This value is a normal decimal number and fits within a 16-bit integer
+			return (Immediate(immValue), nil)
+		} else if canReturnTwo, let twoImms = Int32(string) {
+			// This value is a normal decimal number and fits within a 32-bit integer and we're allowed to make 2, split it up
+			return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
+		} else {
+			// Attempt to parse hexadecimal if possible, otherwise fail
+			if valid16BitHexRegex.test(string) {
+				// This should fit within a 16-bit integer
+				let scanner = NSScanner(string: string)
+				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+				if scanner.scanHexInt(pointer) {
+					// Safe to make an Int16 from this value; bit length already checked
+					return (Immediate(Int16(truncatingBitPattern: pointer.memory)), nil)
+				} else {
+					print("Unable to create immediate value from string: \(string)")
+					return nil
+				}
+			} else if canReturnTwo && valid32BitHexRegex.test(string) {
+				// This should fit within a 32-bit integer, and we're allowed to make 2
+				let scanner = NSScanner(string: string)
+				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+				if scanner.scanHexInt(pointer) {
+					// Safe to make an Int32 from this value; bit length already checked
+					return (Immediate(Int16(truncatingBitPattern: pointer.memory & 0xFFFF)), Immediate(Int16(truncatingBitPattern: pointer.memory >> 16)))
+				} else {
+					print("Unable to create immediate value from string: \(string)")
+					return nil
+				}
 			} else {
 				print("Unable to create immediate value from string: \(string)")
 				return nil
 			}
-		} else {
-			print("Unable to create immediate value from string: \(string)")
-			return nil
 		}
-    }
+	}
 }
