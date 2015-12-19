@@ -1,4 +1,7 @@
 # This is an input file for testing.
+
+:ad
+
 		.data
 string:
 		.ascii "This is a string in the data segment." # This is a comment after the string
@@ -14,9 +17,10 @@ array:
 beginning:
 		li  $t0, -1
 		li  $t1, 1
-label1: li  $t2, 2  # This is a comment
-		li  $t3, 32767 # INT16_MAX
-:ae
+		li  $t2, 2				# This is a comment
+test:	li  $t3, 32767			# INT16_MAX (0x7fff)
+		li	$t4, 32768			# $t4 should be 0x00008000, currently 0xffff8000
+		li	$t5, 0x8000
 		li  $v0, 5
 		li	$s0, 65
 		li	$s1, 66
@@ -28,4 +32,23 @@ label1: li  $t2, 2  # This is a comment
 		add	$t1, $t1, $t1
 		la	$a0, string
 		li	$v0, 4
+		syscall
+
+test_loop:
+		li	$t0, 0				# Accumulator
+		li	$s0, 0				# Loop counter
+		li	$s1, 10				# Loop sentinel
+loop:
+		add	$t0, $t0, $s0
+		addi	$s0, $s0, 1		# Counter++
+		bne	$s0, $s1, loop		# Keep looping until s0 == 10
+
+:ae
+
+		li	$s0, 0
+loop2:
+		add	$t0, $t0, $s0
+		addi	$s0, $s0, 1
+		bne	$s0, $s1, loop2
+
 		syscall

@@ -183,14 +183,14 @@ class Instruction: CustomStringConvertible {
 	///
 	/// Format for J-type instructions:
 	/// oooo ooii iiii iiii iiii iiii iiii iiii
-	var numericEncoding: Int32? {
+	var numericEncoding: Int32 {
 		get {
 			if self.arguments.count == 0 {
-				return nil
+				return INT32_MAX
 			}
 			if case .Directive(_) = self.type {
 				// Directives have no encoded representation
-				return nil
+				return INT32_MAX
 			}
 			let oShift: Int32 = 26 // Number of bits to shift the opcode in
 			let sShift: Int32 = 21 // Number of bits to shift the s register in
@@ -241,7 +241,6 @@ class Instruction: CustomStringConvertible {
 				}
 				encoding |= opcode << oShift
 			case let .Jump(_, dest):
-				// Interesting problem here; don't know how to generate immediate offset without information from the outside world
 				switch(dest) {
 				case .Left(let reg):
 					// This is actually an R-type instruction, not a J-type
@@ -304,7 +303,7 @@ class Instruction: CustomStringConvertible {
 				encoding |= functionCode
 			default:
 				print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
-				return nil
+				return INT32_MAX
 			}
 			return encoding
 		}
@@ -348,7 +347,6 @@ class Instruction: CustomStringConvertible {
 			let newImm = Immediate(Int16(truncatingBitPattern: offset >> 2))
 			// Instructions are always aligned to a 4-byte boundary, so the offset can safely be shifted down 2 here
 			// without losing any information; just need to bitshift back up on the way out during execution
-			print("Offset: \(offset)")
 			self.arguments[3] = "\(newImm.value)"
 			self.type = .Branch(op: op, link: link, src1: src1, src2: src2, dest: newImm)
 		case let .ALUI(op, dest, src1, _):
@@ -725,7 +723,7 @@ class Instruction: CustomStringConvertible {
 				print("Invalid label: \(args[1])")
 				return nil
 			}
-			type = .Jump(link: args[0] == "jal", dest: .Right(abcd.signExtended))
+			type = .Jump(link: args[0] == "jal", dest: .Right(aaaa.signExtended))
 			let jump = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			jump.unresolvedDependencies.append(args[1])
 			return [jump]
@@ -749,7 +747,7 @@ class Instruction: CustomStringConvertible {
 			guard validLabelRegex.test(args[3]), let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: abcd)
+			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: aaaa)
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			equal.unresolvedDependencies.append(args[3])
 			return [equal]
@@ -776,7 +774,7 @@ class Instruction: CustomStringConvertible {
 			default:
 				fatalError("Invalid branch instruction \(args[0])")
 			}
-			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: abcd)
+			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: aaaa)
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			compare.unresolvedDependencies.append(args[2])
 			return [compare]
@@ -816,12 +814,12 @@ class Instruction: CustomStringConvertible {
 			}
 			// This must be decomposed into two instructions, since addresses are always 32 bits
 			// lui	dest, src.upper
-			let lui = Instruction.parseString("lui " + args[1] + ", \(abcd.value)", location: location, verbose: false)![0]
+			let lui = Instruction.parseString("lui " + args[1] + ", \(aaaa.value)", location: location, verbose: false)![0]
 			lui.unresolvedDependencies.append(args[2])
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(abcd.value)", location: location + 4, verbose: false)![0]
+			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(aaaa.value)", location: location + 4, verbose: false)![0]
 			ori.unresolvedDependencies.append(args[2])
 			return [lui, ori]
 		case "move":

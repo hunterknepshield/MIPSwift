@@ -171,6 +171,10 @@ class REPL {
 									print("Cannot overwrite existing instruction: \(existingInstruction)")
 								}
 							}
+							// If auto-execution is disabled and there isn't yet a pause location, make one
+							if !self.autoexecute && self.pausedTextLocation == nil {
+								self.pausedTextLocation = inst.location
+							}
 							// Increment the current location by however much the instruction requires
 							// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
 							locationsToInstructions[self.currentWriteLocation] = inst
@@ -217,15 +221,16 @@ class REPL {
 	
 	/// Resume execution from the last executed instruction until it catches up
 	/// and needs new input.
-    func resumeExecution() {
+	func resumeExecution(fromJump: Bool = false) {
         print("Resuming execution...")
-        // Auto-execute was disabled, so resume execution from the instruction after self.lastExecutedInstructionLocation
+        // Auto-execute was disabled, so resume execution from the instruction at self.pausedTextLocation
         // Alternatively, if lastExecutedInstructionLocation's lookup is nil, nothing was ever executed, so start from the beginning
-        var currentInstruction = locationsToInstructions[pausedTextLocation ?? beginningText]
+		var currentInstruction = locationsToInstructions[fromJump ? self.currentTextLocation : (self.pausedTextLocation ?? 0)]
+		
         while currentInstruction != nil {
             // Execute the current instruction, then execute the next instruction, etc. until nil is found
             executeInstruction(currentInstruction!)
-            currentInstruction = locationsToInstructions[currentTextLocation]
+            currentInstruction = locationsToInstructions[self.currentTextLocation]
         }
         print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
         if self.autoexecute {
@@ -288,14 +293,14 @@ class REPL {
         case .InstructionDump:
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
-            locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1)") })
+            locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\($0.1.numericEncoding.format(PrintOption.Binary.rawValue))") })
         case .SingleInstruction(let location):
             // Print the instruction at the given location
             guard let instruction = locationsToInstructions[location] else {
                 print("Invalid location: \(location.toHexWith0x())")
                 break
             }
-            print("\t\(instruction)")
+            print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue)))")
         case .Memory(let loc, let numWords):
             let location: Int32
             switch(loc) {
@@ -315,8 +320,9 @@ class REPL {
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
             for i in 0..<numWords {
                 let address = location + 4*i // Loading in 4-byte chunks
-				if let instruction = self.locationsToInstructions[address], let encoding = instruction.numericEncoding {
+				if let instruction = self.locationsToInstructions[address] {
 					// Check the instruction memory first
+					let encoding = instruction.numericEncoding
 					let (highest, higher, lower, lowest) = encoding.toBytes()
 					words.append(encoding)
 					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
@@ -440,11 +446,7 @@ class REPL {
 	/// passed in.
     func executeInstruction(instruction: Instruction) {
         if self.trace {
-			if let encoding = instruction.numericEncoding {
-				print("\(instruction)\t\t\(encoding.format(PrintOption.Binary.rawValue))")
-			} else {
-				print("\(instruction)")
-			}
+			print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue))")
         }
 		
         // Update the current location
@@ -544,7 +546,6 @@ class REPL {
             }
             self.registers.set(pc.name, destinationAddress)
             self.currentTextLocation = destinationAddress
-			// TODO resume execution at new location
         case let .Branch(op, link, src1, src2, offset):
             let reg1Value = self.registers.get(src1.name)
 			let src2Value: Int32
@@ -557,13 +558,12 @@ class REPL {
 			}
             if op(reg1Value, src2Value) {
                 // Take this branch
-				let destinationAddress = instruction.location + (offset.signExtended << 2) - (instruction.pcIncrement)
+				let destinationAddress = instruction.location + (offset.signExtended << 2)
                 if link {
                     self.registers.set(ra.name, self.currentTextLocation)
                 }
                 self.registers.set(pc.name, destinationAddress)
                 self.currentTextLocation = destinationAddress
-				// TODO resume execution at new location
             }
         case .Directive(_):
 			// Never reached, directives are always executed immediately
@@ -579,6 +579,13 @@ class REPL {
         if self.autodump {
             executeCommand(.RegisterDump)
         }
+		
+		if self.currentWriteLocation != instruction.location + instruction.pcIncrement {
+			// A jump of some kind has occurred
+			resumeExecution(true)
+			// TODO find a way to do this without causing mutual recursion with resumeExecution()
+			// and executeInstruction()
+		}
     }
 	
 	/// Execute a syscall.
