@@ -34,6 +34,8 @@ enum Command {
 	///
 	/// - Parameter label: The name of the label whose information will be printed.
 	case SingleLabel(label: String)
+	/// Print all as-of-yet unresolved labels.
+	case Unresolved
 	/// Print all instructions as well as their locations.
     case InstructionDump
 	/// Print the instruction at a location.
@@ -109,6 +111,8 @@ enum Command {
 					return nil
                 }
             }
+		case "unresolved", "unres", "u":
+			self = .Unresolved
         case "instructions", "insts", "instructiondump", "instdump", "id":
             self = .InstructionDump
         case "instruction", "inst", "i":

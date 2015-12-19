@@ -1,6 +1,7 @@
 # This is an input file for testing.
 
 :ad
+#:ae
 
 		.data
 string:
@@ -43,12 +44,12 @@ loop:
 		addi	$s0, $s0, 1		# Counter++
 		bne	$s0, $s1, loop		# Keep looping until s0 == 10
 
-:ae
-
 		li	$s0, 0
+		li	$s1, 1000
 loop2:
 		add	$t0, $t0, $s0
 		addi	$s0, $s0, 1
 		bne	$s0, $s1, loop2
 
+done:
 		syscall

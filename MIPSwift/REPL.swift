@@ -28,6 +28,10 @@ class REPL {
 	var currentTextLocation = beginningText
 	/// Keeps track of where execution was last paused.
 	var pausedTextLocation: Int32?
+	/// Used to determine whether execution is currently being resumed or not.
+	/// This avoids issues with multiple levels of recursion when calling
+	/// resumeExecution() from a jump or branch.
+	var currentlyResuming = false
 	/// Used to determine whether things are currently being written to the data
 	/// or the text segment.
 	var writingData = false
@@ -130,11 +134,13 @@ class REPL {
 								inst.resolveDependency(label, location: loc)
 							} else {
 								// Don't yet know the location of this label yet; pause execution to avoid issues
-								print("As-of-yet unresolved dependency: \(label)")
-								if !self.usingFile {
-									// If a file is being read, the label is likely defined elsewhere already
-									print("Execution will be paused. Attempting to resume execution before all dependencies are resolved may cause undefined behavior.")
-									// TODO pause
+								if self.autoexecute {
+									self.autoexecute = false
+									self.pausedTextLocation = inst.location
+									if !self.usingFile {
+										print("Execution will be paused. Attempting to resume execution before all dependencies are resolved will result in undefined behavior.")
+									}
+									// If a file is being read, the label is likely defined elsewhere already, so don't print anything
 								}
 								if let existingUnresolved = unresolvedInstructions[label] {
 									unresolvedInstructions[label] = existingUnresolved + [inst]
@@ -205,6 +211,9 @@ class REPL {
         if inputData.length == 0 && self.usingFile {
             // Reached the end of file, switch back to standard input
             print("End of file reached. Switching back to standard input. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+			if self.unresolvedInstructions.count != 0 {
+				print("There are still instructions that have unresolved label dependencies. Attempting to resume execution before resolving them will result in undefined behavior. Execute the '\(commandDelimiter)unresolved' comamnd to view them.")
+			}
             self.inputSource.closeFile()
             self.inputSource = stdIn
             self.usingFile = false
@@ -222,24 +231,28 @@ class REPL {
 	/// Resume execution from the last executed instruction until it catches up
 	/// and needs new input.
 	func resumeExecution(fromJump: Bool = false) {
-        print("Resuming execution...")
+		self.currentlyResuming = true
+		
+		if !fromJump {
+			print("Resuming execution...")
+		}
+		
         // Auto-execute was disabled, so resume execution from the instruction at self.pausedTextLocation
         // Alternatively, if lastExecutedInstructionLocation's lookup is nil, nothing was ever executed, so start from the beginning
 		var currentInstruction = locationsToInstructions[fromJump ? self.currentTextLocation : (self.pausedTextLocation ?? 0)]
-		
         while currentInstruction != nil {
             // Execute the current instruction, then execute the next instruction, etc. until nil is found
             executeInstruction(currentInstruction!)
             currentInstruction = locationsToInstructions[self.currentTextLocation]
         }
-        print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
-        if self.autoexecute {
-            // Auto-execution is enabled, so wipe any stored pausedTextLocation value
-            self.pausedTextLocation = nil
-        } else {
-            // Update the pausedTextLocation to note that execution has come this far
-            self.pausedTextLocation = self.currentTextLocation
-        }
+		
+		if !fromJump {
+			print("Execution has caught up. Auto-execute of instructions is \(self.autoexecute ? "enabled" : "disabled").")
+		}
+		
+		// Update the pausedTextLocation to note that execution has come this far, or wipe it if auto-execute is enabled
+		self.pausedTextLocation = self.autoexecute ? nil : self.currentTextLocation
+		self.currentlyResuming = false
     }
 	
 	/// Execute a parsed interpreter command.
@@ -290,6 +303,11 @@ class REPL {
                 break
             }
             print("\(label): \(location.toHexWith0x())")
+		case .Unresolved:
+			// Print any unresolved labels.
+			print("Currently unresolved labels: ", terminator: "")
+			var counter = 0
+			self.unresolvedInstructions.sort({ return $0.0.0 < $0.1.0 }).forEach({ print($0.0, terminator: ++counter < self.unresolvedInstructions.count ? ", " : "\n") })
         case .InstructionDump:
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
@@ -386,30 +404,31 @@ class REPL {
             print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.toHexWith0x())>'")
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
-            print("All interpreter commands:")
-            print("\tautoexecute|ae: toggle auto-execution of entered instructions.")
-            print("\texecute|exec|ex|e: execute all instructions previously paused by disabling auto-execution.")
-            print("\ttrace|t: toggle printing of every instruction as it is executed.")
-            print("\tverbose|v: toggle verbose parsing of instructions.")
-            print("\tregisterdump|regdump|registers|regs|rd: print the current values of all registers.")
-            print("\tregister|reg|r [register]: print the current value of a register.")
-            print("\tautodump|ad: toggle auto-dump of registers after execution of every instruction.")
-            print("\tlabeldump|labels|ld: print all labels as well as their locations.")
-            print("\tlabel|l [label]: print the location of a label.")
+            print("All interpreter commands. Required parameters are displayed in [brackets], optional parameters are displayed in (parentheses), and multiple valid values are separated|by|pipes.")
+            print("\tautoexecute|ae:                                 toggle auto-execution of entered instructions.")
+            print("\texecute|exec|ex|e:                              execute all instructions previously paused by disabling auto-execution.")
+            print("\ttrace|t:                                        toggle printing of every instruction as it is executed.")
+            print("\tverbose|v:                                      toggle verbose parsing of instructions.")
+            print("\tregisterdump|regdump|registers|regs|rd:         print the current values of all registers.")
+            print("\tregister|reg|r [register]:                      print the current value of a register.")
+            print("\tautodump|ad:                                    toggle auto-dump of registers after execution of every instruction.")
+            print("\tlabeldump|labels|ld:                            print all labels as well as their locations.")
+            print("\tlabel|l [label]:                                print the location of a label.")
+			print("\tunresolved|unres|u:                             print any as-of-yet unresolved labels.")
             print("\tinstructions|insts|instructiondump|instdump|id: print all instructions as well as their locations.")
-            print("\tinstruction|inst|i [location]: print the instruction at a location.")
-            print("\tmemory|mem|m [location|register|label] [count]: print a number of words beginning at a location in memory.")
-            print("\thexadecimal|hex: set register dumps to print out values in hexadecimal (base 16).")
-            print("\tdecimal|dec: set register dumps to print out values in signed decimal (base 10).")
-            print("\toctal|oct: set register dumps to print out values in octal (base 8).")
-            print("\tbinary|bin: set register dumps to print out values in binary (base 2).")
-            print("\tstatus|settings|s: display current interpreter settings.")
-            print("\thelp|h|?: display the help message.")
-            print("\tabout: display information about this software.")
-            print("\tcommands|cmds|c: display this message.")
-            print("\tnoop|n: do nothing.")
-            print("\tfile|f|use|usefile|openfile|open|o [file]: open a file to read instructions from (auto-execution will be paused).")
-            print("\texit|quit|q: exit the interpreter.")
+            print("\tinstruction|inst|i [location]:                  print the instruction at a location.")
+            print("\tmemory|mem|m [location|register|label] (count): print a number of words beginning at a location in memory.")
+            print("\thexadecimal|hex:                                set register dumps to print out values in hexadecimal (base 16).")
+            print("\tdecimal|dec:                                    set register dumps to print out values in signed decimal (base 10).")
+            print("\toctal|oct:                                      set register dumps to print out values in octal (base 8).")
+            print("\tbinary|bin:                                     set register dumps to print out values in binary (base 2).")
+            print("\tstatus|settings|s:                              display current interpreter settings.")
+            print("\thelp|h|?:                                       display the help message.")
+            print("\tabout:                                          display information about this software.")
+            print("\tcommands|cmds|c:                                display this message.")
+            print("\tnoop|n:                                         do nothing.")
+            print("\tfile|f|use|usefile|openfile|open|o [file]:      open a file to read instructions from (auto-execution will be paused).")
+            print("\texit|quit|q:                                    exit the interpreter.")
         case .About:
             // Display information about the interpreter
             print("MIPSwift v\(mipswiftVersion): a MIPS interpreter written in Swift by Hunter Knepshield.")
@@ -580,11 +599,9 @@ class REPL {
             executeCommand(.RegisterDump)
         }
 		
-		if self.currentWriteLocation != instruction.location + instruction.pcIncrement {
+		if !self.currentlyResuming && self.currentWriteLocation != instruction.location + instruction.pcIncrement {
 			// A jump of some kind has occurred
 			resumeExecution(true)
-			// TODO find a way to do this without causing mutual recursion with resumeExecution()
-			// and executeInstruction()
 		}
     }
 	
@@ -640,12 +657,10 @@ class REPL {
             case .Data:
                 self.writingData = true
             case .Global:
-                let label = args[0]
-                // If label is already defined, don't need to do anything
-                // If it isn't already defined, TODO implement
-                if labelsToLocations[label] == nil {
-                    print("Undefined label: \(label) TODO implement")
-                }
+				// This directive has no real effect in MIPSwift. If the label is already
+				// defined, we don't need to do anything. If it isn't already defined,
+				// there's nothing we can do since we still don't know its location.
+				break
             case .Align:
                 // Align current counter to a 2^n-byte boundary; increment already calculated
 				self.currentWriteLocation += instruction.pcIncrement
