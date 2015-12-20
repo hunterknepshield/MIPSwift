@@ -40,15 +40,17 @@ enum Command {
     case InstructionDump
 	/// Print the instruction at a location.
 	///
-	/// - Parameter location: A location in memory.
-	case SingleInstruction(location: Int32)
+	/// - Parameters:
+	///		- location: A label or direct location in memory.
+	///		- count: The number of instructions to print.
+	case SingleInstruction(location: Either<Int32, String>, count: Int)
 	/// Print a number of words beginning at a location in memory.
 	///
 	/// - Parameters:
 	///		- location: The location, label, or register whose value at which
 	///		memory values will be printed.
-	///		- numWords: The number of words to print.
-	case Memory(location: Either3<Int32, Register, String>, numWords: Int)
+	///		- count: The number of words to print.
+	case Memory(location: Either3<Int32, Register, String>, count: Int)
 	/// Set register dumps to print out values in hexadecimal.
 	case Hex
 	/// Set register dumps to print out values in decimal.
@@ -103,114 +105,118 @@ enum Command {
             if argCount != 1 {
 				print("Command \(command) expects 1 argument, got \(argCount).")
 				return nil
-            } else {
-                if validLabelRegex.test(args[0]) {
-                    self = .SingleLabel(label: args.first!)
-                } else {
-					print("Invalid label: \(args[0])")
-					return nil
-                }
-            }
+			}
+			if validLabelRegex.test(args[0]) {
+				self = .SingleLabel(label: args.first!)
+			} else {
+				print("Invalid label: \(args[0])")
+				return nil
+			}
 		case "unresolved", "unres", "u":
 			self = .Unresolved
         case "instructions", "insts", "instructiondump", "instdump", "id":
             self = .InstructionDump
         case "instruction", "inst", "i":
-            if argCount != 1 {
-				print("Command \(command) expects 1 argument, got \(argCount).")
+            if argCount == 0 || argCount > 2 {
+				print("Command \(command) expects 1 or 2 arguments, got \(argCount).")
 				return nil
-            } else if !valid32BitHexRegex.test(args[0]) {
+            } else if !valid32BitHexRegex.test(args[0]) && !validLabelRegex.test(args[0]) {
 				print("Invalid location: \(args[0])")
 				return nil
+			}
+			let location: Either<Int32, String>
+			if validLabelRegex.test(args[0]) {
+				// This was a label
+				location = .Right(args[0])
 			} else {
-                // Attempt to read a hex value
-                let scanner = NSScanner(string: args[0])
-                let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-                defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-                if scanner.scanHexInt(pointer) {
-                    if pointer.memory != 0 && pointer.memory < UINT32_MAX {
-                        // Safe to make an Int32 from this value
-                        self = .SingleInstruction(location: Int32(pointer.memory))
-                    } else {
-                        // Unsafe to make an Int32 from this value, just complain
-						print("Invalid location: \(args[0])")
-						return nil
-                    }
-                } else {
+				// Attempt to read a hex value
+				let scanner = NSScanner(string: args[0])
+				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+				if scanner.scanHexInt(pointer) /*&& pointer.memory < UINT32_MAX */{
+					// Safe to make an Int32 from this value
+					location = .Left(Int32(pointer.memory))
+				} else {
+					// Unsafe to make an Int32 from this value, just complain
 					print("Invalid location: \(args[0])")
 					return nil
-                }
+				}
             }
+			let count: Int
+			if argCount > 1 {
+				// User also specified a number of words to read
+				guard let num = Int(args[1]) where num > 0 else {
+					print("Invalid number of bytes specified: \(args[1])")
+					return nil
+				}
+				count = num
+			} else {
+				count = 4
+			}
+			self = .SingleInstruction(location: location, count: count)
         case "memory", "mem", "m":
             if argCount == 0 || argCount > 2 {
 				print("Command \(command) expects 1 or 2 arguments, got \(argCount).")
 				return nil
-            } else {
-				// Check first if the user entered a register, then a label, otherwise try to make a location from hex
-				let location: Either3<Int32, Register, String>
-                if args[0].containsString(registerDelimiter) {
-                    guard let reg = Register(args[0], writing: false, user: false) else {
-						print("Invalid location: \(args[0])")
-						return nil
-                    }
-					location = .Middle(reg)
-				} else if validLabelRegex.test(args[0]) {
-					// Slight preference to labels over raw hex addresses
-					location = .Right(args[0])
-				} else if valid32BitHexRegex.test(args[0]) {
-					// Attempt to read a hex value
-                    let scanner = NSScanner(string: args[0])
-                    let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-                    defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-                    if scanner.scanHexInt(pointer) {
-                        if pointer.memory < UINT32_MAX {
-                            // Safe to make an Int32 from this value
-                            let address = pointer.memory.signed()
-                            if address % 4 != 0 {
-								print("Unaligned memory address: \(address.toHexWith0x())")
-								return nil
-                            }
-							location = .Left(address)
-                        } else {
-                            // Unsafe to make an Int32 from this value, just complain
-							print("Invalid location: \(args[0])")
-							return nil
-                        }
-                    } else {
-						print("Invalid location: \(args[0])")
-						return nil
-                    }
-				} else {
+            }
+			// Check first if the user entered a register, then a label, otherwise try to make a location from hex
+			let location: Either3<Int32, Register, String>
+			if args[0].containsString(registerDelimiter) {
+				guard let reg = Register(args[0], writing: false, user: false) else {
 					print("Invalid location: \(args[0])")
 					return nil
 				}
-				let numWords: Int
-				if argCount > 1 {
-					// User also specified a number of words to read
-					guard let num = Int(args[1]) where num > 0 else {
-						print("Invalid number of bytes specified: \(args[1])")
+				location = .Middle(reg)
+			} else if validLabelRegex.test(args[0]) {
+				// Slight preference to labels over raw hex addresses
+				location = .Right(args[0])
+			} else if valid32BitHexRegex.test(args[0]) {
+				// Attempt to read a hex value
+				let scanner = NSScanner(string: args[0])
+				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
+				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
+				if scanner.scanHexInt(pointer) /*&& pointer.memory < UINT32_MAX */{
+					// Safe to make an Int32 from this value
+					let address = pointer.memory.signed
+					if address % 4 != 0 {
+						print("Unaligned memory address: \(address.hexWith0x)")
 						return nil
 					}
-					numWords = num
+					location = .Left(address)
 				} else {
-					numWords = 4
+					// Unsafe to make an Int32 from this value, just complain
+					print("Invalid location: \(args[0])")
+					return nil
 				}
-				self = .Memory(location: location, numWords: numWords)
-            }
+			} else {
+				print("Invalid location: \(args[0])")
+				return nil
+			}
+			let count: Int
+			if argCount > 1 {
+				// User also specified a number of words to read
+				guard let num = Int(args[1]) where num > 0 else {
+					print("Invalid number of bytes specified: \(args[1])")
+					return nil
+				}
+				count = num
+			} else {
+				count = 4
+			}
+			self = .Memory(location: location, count: count)
         case "registerdump", "regdump", "registers", "regs", "rd":
             self = .RegisterDump
         case "register", "reg", "r":
             if argCount != 1 {
 				print("Command \(command) expects 1 argument, got \(argCount).")
 				return nil
-            } else {
-                if validRegisters.contains(args[0]) {
-					self = .SingleRegister(register: args[0])
-                } else {
-					print("Invalid register reference: \(args[0])")
-					return nil
-                }
             }
+			if validRegisters.contains(args[0]) {
+				self = .SingleRegister(register: args[0])
+			} else {
+				print("Invalid register reference: \(args[0])")
+				return nil
+			}
         case "autodump", "ad":
             self = .AutoDump
         case "hex", "hexadecimal":
@@ -235,9 +241,8 @@ enum Command {
             if argCount != 1 {
 				print("Command \(command) expects 1 argument, got \(argCount).")
 				return nil
-            } else {
-                self = .UseFile(file: args[0])
             }
+			self = .UseFile(file: args[0])
         case "exit", "quit", "q":
 			self = .Exit(code: 0)
         default:

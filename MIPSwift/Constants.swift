@@ -57,6 +57,18 @@ let hi = Register("$hi", writing: true, user: false)!
 /// The register $lo, which is used in 64-bit instructions, such as multiplication
 /// and division.
 let lo = Register("$lo", writing: true, user: false)!
+/// The register $a0, which is used for argument passing, including in syscalls.
+let a0 = Register("$a0", writing: true, user: false)!
+/// The register $a1, which is used for argument passing, including in syscalls.
+let a1 = Register("$a1", writing: true, user: false)!
+/// The register $a2, which is used for argument passing, including in syscalls.
+let a2 = Register("$a2", writing: true, user: false)!
+/// The register $a3, which is used for argument passing, including in syscalls.
+let a3 = Register("$a3", writing: true, user: false)!
+/// The register $v0, which is used for return values, including in syscalls.
+let v0 = Register("$v0", writing: true, user: false)!
+/// The register $v1, which is used for return values, including in syscalls.
+let v1 = Register("$v1", writing: true, user: false)!
 
 // MARK: String parsing constants
 

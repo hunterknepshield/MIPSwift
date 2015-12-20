@@ -1,17 +1,21 @@
 # This is an input file for testing.
 
 :ad
-#:ae
+:ae
 
 		.data
 string:
 		.ascii "This is a string in the data segment." # This is a comment after the string
 string2:
 		.asciiz "This is another string!\n" # Putting a double-quote in a comment confuses things still
-.space 7
-		.asciiz "Right after \".space\""
 		.align 2
-array:
+array:	.space 16				# Space for 4 words (4*4 bytes)
+		.asciiz "Right after \".space\""
+
+read_string:
+		.space 32
+		.align 2
+prefilled_array:
 		.word 1 2 3 4 5 6 7 8 9
 
 		.text
@@ -45,11 +49,29 @@ loop:
 		bne	$s0, $s1, loop		# Keep looping until s0 == 10
 
 		li	$s0, 0
-		li	$s1, 1000
+		li	$s1, 10
 loop2:
 		add	$t0, $t0, $s0
 		addi	$s0, $s0, 1
 		bne	$s0, $s1, loop2
 
 done:
+		syscall
+
+# Reads 4 integers
+#		la	$s2, array
+#		move	$s0, $s2
+#		addi	$s1, $s2, 16
+#read_loop:
+#		li	$v0, 5
+#		syscall
+#		sw	$v0, 0($s0)
+#		addi	$s0, $s0, 4
+#		bne	$s0, $s1, read_loop
+
+#		li	$v0, 8
+#		la	$a0, read_string
+#		li	$a1, 32
+#		syscall
+		li	$v0, 12
 		syscall

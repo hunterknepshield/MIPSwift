@@ -11,7 +11,9 @@
 
 import Foundation
 
-/// Representation of a syscall.
+/// Representation of a syscall. The raw values are the value stored in $v0 at
+/// the time of the syscall's execution. Additional arguments and return values
+/// are dependent on the type of syscall.
 enum SyscallCode: Int32 {
 	/// $a0 = value to print.
     case PrintInt = 1
@@ -28,7 +30,8 @@ enum SyscallCode: Int32 {
 	/// $f0 = value read.
     case ReadDouble // $f0
 	/// $a0 = address of string to read into, $a1 = maximum number of characters
-	/// to read.
+	/// to read. Reads up to n - 1 characters and pads with '\0' (this is the
+	/// standard UNIX behavior).
     case ReadString
 	/// $a0 = number of bytes to allocate, $v0 = address of allocated space.
     case SBRK

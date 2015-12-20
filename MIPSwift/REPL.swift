@@ -32,18 +32,18 @@ class REPL {
 	/// This avoids issues with multiple levels of recursion when calling
 	/// resumeExecution() from a jump or branch.
 	var currentlyResuming = false
-	/// Used to determine whether things are currently being written to the data
-	/// or the text segment.
-	var writingData = false
 	/// Used to keep track of current point the interpreter is writing data to
 	/// in the data segment
 	var currentDataLocation = beginningData
+	/// Used to determine whether things are currently being written to the data
+	/// or the text segment.
+	var writingData = false
 	/// Used to determine the current location at which a piece of data should
 	/// be written; may be either in the text segment or in the data segment.
 	var currentWriteLocation: Int32 {
 		get { return self.writingData ? self.currentDataLocation : self.currentTextLocation }
 		set {
-			if self.writingData { currentDataLocation = newValue }
+			if self.writingData { self.currentDataLocation = newValue }
 			else { self.currentTextLocation = newValue }
 		}
 	}
@@ -91,7 +91,7 @@ class REPL {
         while true {
             if !self.usingFile {
                 // Print the prompt if reading from stdIn
-                print("\(self.currentWriteLocation.toHexWith0x())> ", terminator: "") // Prints PC without a newline
+                print("\(self.currentWriteLocation.hexWith0x)> ", terminator: "") // Prints PC without a newline
             }
             let input = readInput() // Read input (whitespace is already trimmed from either end)
             input.forEach({ inputString in
@@ -177,16 +177,29 @@ class REPL {
 									print("Cannot overwrite existing instruction: \(existingInstruction)")
 								}
 							}
+							
 							// If auto-execution is disabled and there isn't yet a pause location, make one
 							if !self.autoexecute && self.pausedTextLocation == nil {
 								self.pausedTextLocation = inst.location
 							}
+							
+							// Write this instruction's encoding out to memory
+							let encoding = inst.numericEncoding
+							if encoding == INT32_MAX {
+								// Something went wrong...
+								print("\(inst) has no valid encoding.")
+							} else {
+								self.memory[self.currentWriteLocation] = encoding.highestByte
+								self.memory[self.currentWriteLocation + 1] = encoding.higherByte
+								self.memory[self.currentWriteLocation + 2] = encoding.lowerByte
+								self.memory[self.currentWriteLocation + 3] = encoding.lowestByte
+							}
+							
 							// Increment the current location by however much the instruction requires
 							// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
 							locationsToInstructions[self.currentWriteLocation] = inst
 							let newPc = self.currentWriteLocation + inst.pcIncrement
 							self.currentWriteLocation = newPc
-							// TODO possibly write inst.numericEncoding to memory[self.currentWriteLocation..<self.currentWriteLocation + 4]?
 							
 							if self.autoexecute {
 								executeInstruction(inst)
@@ -295,14 +308,14 @@ class REPL {
         case .LabelDump:
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
             print("All labels currently stored: ", terminator: labelsToLocations.count == 0 ? "(none)\n" : "\n")
-            labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.toHexWith0x())") })
+            labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.hexWith0x)") })
         case .SingleLabel(let label):
             // Print the location of the given label
             guard let location = labelsToLocations[label] else {
                 print("\(label): (undefined)")
                 break
             }
-            print("\(label): \(location.toHexWith0x())")
+            print("\(label): \(location.hexWith0x)")
 		case .Unresolved:
 			// Print any unresolved labels.
 			print("Currently unresolved labels: ", terminator: "")
@@ -312,14 +325,29 @@ class REPL {
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
             locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\($0.1.numericEncoding.format(PrintOption.Binary.rawValue))") })
-        case .SingleInstruction(let location):
-            // Print the instruction at the given location
-            guard let instruction = locationsToInstructions[location] else {
-                print("Invalid location: \(location.toHexWith0x())")
-                break
-            }
-            print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue)))")
-        case .Memory(let loc, let numWords):
+        case .SingleInstruction(let loc, let count):
+            // Print a number of instructions starting at the given location
+			let location: Int32
+			switch(loc) {
+			case .Left(let address):
+				location = address
+			case .Right(let label):
+				guard let address = labelsToLocations[label] else {
+					print("Undefined label: \(label)")
+					location = INT32_MAX
+					break
+				}
+				location = address
+			}
+			for i in 0..<count {
+				// Instructions are on 4-byte boundaries
+				if let instruction = locationsToInstructions[location + 4*i] {
+					print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue)))")
+				} else {
+					print("\t\((location + 4*i).hexWith0x):\t(undefined)")
+				}
+			}
+        case .Memory(let loc, let count):
             let location: Int32
             switch(loc) {
             case .Left(let int):
@@ -333,36 +361,27 @@ class REPL {
 				}
 				location = loc
             }
-            // Print numWords*4 bytes of memory starting at location
+            // Print count*4 bytes of memory starting at location
             var words = [Int32]()
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
-            for i in 0..<numWords {
+            for i in 0..<count {
                 let address = location + 4*i // Loading in 4-byte chunks
-				if let instruction = self.locationsToInstructions[address] {
-					// Check the instruction memory first
-					let encoding = instruction.numericEncoding
-					let (highest, higher, lower, lowest) = encoding.toBytes()
-					words.append(encoding)
-					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
-				} else {
-					// Check regular memory
-					let highest = self.memory[address] ?? 0
-					let higher = self.memory[address + 1] ?? 0
-					let lower = self.memory[address + 2] ?? 0
-					let lowest = self.memory[address + 3] ?? 0
-					words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
-					ascii += "\(highest.toPrintableCharacter())\(higher.toPrintableCharacter())\(lower.toPrintableCharacter())\(lowest.toPrintableCharacter())"
-				}
+				let highest = self.memory[address] ?? 0
+				let higher = self.memory[address + 1] ?? 0
+				let lower = self.memory[address + 2] ?? 0
+				let lowest = self.memory[address + 3] ?? 0
+				words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
+				ascii += "\(highest.printableCharacter)\(higher.printableCharacter)\(lower.printableCharacter)\(lowest.printableCharacter)"
             }
             var counter = 0 // For formatting individual lines
 			var lineString = "" // The string that will be printed
             words.forEach({
                 if counter % 4 == 0 {
-                    // Make new lines every 16 bytes (4 sets of 32 bits)
-					print("[\((location + counter*4).toHexWith0x())]", terminator: "\t")
+                    // Make new lines every 16 bytes (4 words)
+					print("[\((location + counter*4).hexWith0x)]", terminator: "\t")
                 }
 				lineString += ascii[counter*4..<(counter*4 + 4)]
-                print($0.toHexWith0x(), terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
+                print($0.hexWith0x, terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
 				if counter % 4 == 0 {
 					print("\(lineString)")
 					lineString = ""
@@ -401,7 +420,7 @@ class REPL {
         case .Help:
             // Display the help message
             print("Enter MIPS instructions line by line. Any instructions that the interpreter declares invalid are entirely ignored and discarded.")
-            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.toHexWith0x())>'")
+            print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.hexWith0x)>'")
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
             print("All interpreter commands. Required parameters are displayed in [brackets], optional parameters are displayed in (parentheses), and multiple valid values are separated|by|pipes.")
@@ -416,7 +435,7 @@ class REPL {
             print("\tlabel|l [label]:                                print the location of a label.")
 			print("\tunresolved|unres|u:                             print any as-of-yet unresolved labels.")
             print("\tinstructions|insts|instructiondump|instdump|id: print all instructions as well as their locations.")
-            print("\tinstruction|inst|i [location]:                  print the instruction at a location.")
+            print("\tinstruction|inst|i [location|label] (count):    print a number of instructions starting at a location.")
             print("\tmemory|mem|m [location|register|label] (count): print a number of words beginning at a location in memory.")
             print("\thexadecimal|hex:                                set register dumps to print out values in hexadecimal (base 16).")
             print("\tdecimal|dec:                                    set register dumps to print out values in signed decimal (base 10).")
@@ -501,8 +520,8 @@ class REPL {
             let addrRegValue = self.registers.get(addrReg.name)
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
-                print("Unaligned memory address: \(address.toHexWith0x())")
-				break // TODO terminate here in the future?
+                print("Unaligned memory address: \(address.hexWith0x)")
+				break // Terminate here in the future?
             }
             if storing {
                 // Storing the value in memReg to memory
@@ -510,21 +529,17 @@ class REPL {
                 switch(size) {
                 case 0:
                     // Storing a single byte (from low-order bits)
-                    let lowest = valueToStore.unsignedLowest8()
-                    self.memory[address] = lowest
+                    self.memory[address] = valueToStore.lowestByte
                 case 1:
                     // Storing a half-word (from low-order bits)
-                    let lower = valueToStore.unsignedLower8()
-                    let lowest = valueToStore.unsignedLowest8()
-                    self.memory[address] = lower
-                    self.memory[address + 1] = lowest
+                    self.memory[address] = valueToStore.lowerByte
+                    self.memory[address + 1] = valueToStore.lowestByte
                 case 2:
                     // Storing a word
-                    let (highest, higher, lower, lowest) = valueToStore.toBytes()
-                    self.memory[address] = highest
-                    self.memory[address + 1] = higher
-                    self.memory[address + 2] = lower
-                    self.memory[address + 3] = lowest
+                    self.memory[address] = valueToStore.highestByte
+                    self.memory[address + 1] = valueToStore.higherByte
+                    self.memory[address + 2] = valueToStore.lowerByte
+                    self.memory[address + 3] = valueToStore.lowestByte
                 default:
                     // Never reached
                     fatalError("Invalid size of store word: \(size)")
@@ -607,18 +622,18 @@ class REPL {
 	
 	/// Execute a syscall.
     func executeSyscall() {
-        guard let syscallCode = SyscallCode(rawValue: self.registers.get("$v0")) else {
+        guard let syscallCode = SyscallCode(rawValue: self.registers.get(v0.name)) else {
             // Don't fatalError() for now, just output
-            print("Invalid syscall code: \(self.registers.get("$v0"))")
+            print("Invalid syscall code: \(self.registers.get(v0.name))")
             return
         }
         switch(syscallCode) {
         case .PrintInt:
             // Print the integer currently in $a0
-            print(self.registers.get("$a0"))
+            print(self.registers.get(a0.name))
         case .PrintString:
             // Print the string that starts at address $a0 and go until '\0' (0x00) is found
-            var address = self.registers.get("$a0")
+            var address = self.registers.get(a0.name)
 			var charValue = self.memory[address] ?? 0
 			while charValue != 0 {
 				print(UnicodeScalar(charValue), terminator: "")
@@ -626,24 +641,56 @@ class REPL {
 			}
         case .ReadInt:
             // Read an integer from standard input and return it in $v0
-            // Maximum of 2147483647, minimum of -2147483648
-            let inputString: String = NSString(data: stdIn.availableData, encoding: NSUTF8StringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
-            guard let value = Int32(inputString) else {
-                print("Invalid input for ReadInt syscall: \(inputString).")
-                break
+            // 32 bits, maximum of 2147483647, minimum of -2147483648
+            let inputString: String = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
+			if let value = Int32(inputString) {
+				self.registers.set(v0.name, value)
+			} else {
+				// Don't print anything, just return 0 in the v0 register
+				self.registers.set(v0.name, 0)
             }
-            self.registers.set("$v0", value)
+		case .ReadString:
+			// Reads input, storing it in the address supplied in $a0, up to a maximum of
+			// n - 1 characters, padding with '\0' wherever reading stops.
+			let inputString = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding) as! String
+			let address = self.registers.get(a0.name)
+			let maxChars = Int(self.registers.get(a1.name) - 1)
+			if maxChars < 1 {
+				// Can't read 0 or negative number of characters; input will just be ignored
+				break
+			}
+			for (index, char) in inputString.unicodeScalars.enumerate() {
+				if index == maxChars {
+					// Write a '\0' character then break
+					self.memory[address + index] = UInt8.allZeros
+					break
+				}
+				self.memory[address + index] = UInt8(char.value)
+			}
+		case .PrintChar:
+			// Print the ASCII representation of the lowest byte of $a0
+			let byte = self.registers.get(a0.name).lowestByte
+			print(Character(UnicodeScalar(byte)), terminator: "")
+		case .ReadChar:
+			// Read an ASCII character into $v0
+			let inputString = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding) as! String
+			if inputString.unicodeScalars.count == 0 {
+				break
+			}
+			print(inputString.escapedString)
+			let char = inputString.unicodeScalars[inputString.unicodeScalars.startIndex]
+			self.registers.set(v0.name, char.value.signed)
         case .Exit:
             // The assembly program has exited, so exit the interpreter as well
             print("Program terminated with exit code 0.")
 			self.executeCommand(.Exit(code: 0))
         case .Exit2:
             // The assembly program has exited with exit code in $a0
-            print("Program terminated with exit code \(self.registers.get("$a0"))")
-			self.executeCommand(.Exit(code: self.registers.get("$a0")))
+            print("Program terminated with exit code \(self.registers.get(a0.name))")
+			self.executeCommand(.Exit(code: self.registers.get(a0.name)))
         default:
 			// Either actually invalid or just unimplemented
-            print("Invalid syscall code: \(self.registers.get("$v0"))")
+            print("Invalid syscall code: \(self.registers.get(v0.name))")
         }
     }
 	
@@ -670,16 +717,16 @@ class REPL {
             case .Word:
                 let initialValues = args.map({ return Int32($0)! })
 				for value in initialValues {
-					self.memory[self.currentWriteLocation++] = value.unsignedHighest8()
-					self.memory[self.currentWriteLocation++] = value.unsignedHigher8()
-					self.memory[self.currentWriteLocation++] = value.unsignedLower8()
-					self.memory[self.currentWriteLocation++] = value.unsignedLowest8()
+					self.memory[self.currentWriteLocation++] = value.highestByte
+					self.memory[self.currentWriteLocation++] = value.higherByte
+					self.memory[self.currentWriteLocation++] = value.lowerByte
+					self.memory[self.currentWriteLocation++] = value.lowestByte
 				}
             case .Half:
                 let initialValues = args.map({ return Int16($0)! })
 				for value in initialValues {
-					self.memory[self.currentWriteLocation++] = value.unsignedUpper8()
-					self.memory[self.currentWriteLocation++] = value.unsignedLower8()
+					self.memory[self.currentWriteLocation++] = value.upperByte
+					self.memory[self.currentWriteLocation++] = value.lowerByte
 				}
             case .Byte:
                 let initialValues = args.map({ return Int8($0)! })
@@ -689,8 +736,7 @@ class REPL {
             case .Ascii, .Asciiz:
 				let string = args[0] // Already has the null terminator if appropriate, sequences are escaped
 				for char in string.unicodeScalars {
-					let value = UInt8(char.value)
-					self.memory[self.currentWriteLocation++] = value
+					self.memory[self.currentWriteLocation++] = UInt8(char.value)
 				}
             }
         } else {

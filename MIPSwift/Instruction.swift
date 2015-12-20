@@ -138,7 +138,7 @@ class Instruction: CustomStringConvertible {
 			var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
 			if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
 				// Add string literal delimiters before and after arguments; only for .ascii/.asciiz
-				string += stringLiteralDelimiter + self.arguments[1].toStringWithLiteralEscapes() + stringLiteralDelimiter
+				string += stringLiteralDelimiter + self.arguments[1].escapedString + stringLiteralDelimiter
 			} else if case .Memory(_) = self.type {
 				// Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
 				string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
@@ -223,7 +223,7 @@ class Instruction: CustomStringConvertible {
 				// oooo ooss ssst tttt iiii iiii iiii iiii
 				encoding |= dest.number << tShift
 				encoding |= src1.number << sShift
-				encoding |= src2.unsignedExtended.signed()
+				encoding |= src2.unsignedExtended.signed
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
@@ -234,7 +234,7 @@ class Instruction: CustomStringConvertible {
 				// oooo ooss ssst tttt iiii iiii iiii iiii
 				encoding |= dest.number << tShift
 				encoding |= addr.number << sShift
-				encoding |= offset.unsignedExtended.signed()
+				encoding |= offset.unsignedExtended.signed
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
 					return INT32_MAX
@@ -292,7 +292,7 @@ class Instruction: CustomStringConvertible {
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
-				encoding |= dest.unsignedExtended.signed()
+				encoding |= dest.unsignedExtended.signed
 				break
 			case .Syscall:
 				// Technically an R-type instruction; everything but function code is 0
@@ -308,7 +308,7 @@ class Instruction: CustomStringConvertible {
 			return encoding
 		}
 	}
-    var description: String { get { return "\(self.location.toHexWith0x()):\t\(self.instructionString ?? (self.completeString ?? self.rawString))" } }
+    var description: String { get { return "\(self.location.hexWith0x):\t\(self.instructionString ?? (self.completeString ?? self.rawString))" } }
 	
 	/// Initialize an instruction with all data already parsed and validated.
 	/// This initializer should only be used with simple instructions. All
@@ -337,7 +337,7 @@ class Instruction: CustomStringConvertible {
 		switch(self.type) {
 		case let .Jump(link, _):
 			// Overwrite dest with a new value
-			self.arguments[1] = (location >> 2).toHexWith0x()
+			self.arguments[1] = (location >> 2).hexWith0x
 			self.type = .Jump(link: link, dest: .Right(location >> 2))
 			// Instructions are always aligned to a 4-byte boundary, so the address can safely be shifted down 2 here
 			// without losing any information; just need to bitshift back up on the way out during execution
@@ -588,7 +588,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Left(args[0] == "add" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }), dest: dest, src1: src1, src2: .Left(src2))
+			type = .ALUR(op: .Left(args[0] == "add" ? (&+) : { return ($0.unsigned &+ $1.unsigned).signed }), dest: dest, src1: src1, src2: .Left(src2))
 			let add = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [add]
 		case "sub", "subu":
@@ -599,7 +599,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Left(args[0] == "sub" ? (&-) : { return ($0.unsigned() &- $1.unsigned()).signed() }), dest: dest, src1: src1, src2: .Left(src2))
+			type = .ALUR(op: .Left(args[0] == "sub" ? (&-) : { return ($0.unsigned &- $1.unsigned).signed }), dest: dest, src1: src1, src2: .Left(src2))
 			let sub = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [sub]
 		case "and", "or", "xor", "nor":
@@ -621,7 +621,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Register(args[3], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Left(args[0] == "slt" ? { return $0 < $1 ? 1 : 0 } : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }), dest: dest, src1: src1, src2: .Left(src2))
+			type = .ALUR(op: .Left(args[0] == "slt" ? { return $0 < $1 ? 1 : 0 } : { return $0.unsigned < $1.unsigned ? 1 : 0 }), dest: dest, src1: src1, src2: .Left(src2))
 			let slt = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [slt]
 		case "sll", "sra", "srl":
@@ -638,7 +638,7 @@ class Instruction: CustomStringConvertible {
 				print("Invalid shift amount: \(shift)")
 				return nil
 			}
-			type = .ALUR(op: .Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned() >> $1.unsigned()).signed() })), dest: dest, src1: src1, src2: .Right(shift))
+			type = .ALUR(op: .Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned >> $1.unsigned).signed })), dest: dest, src1: src1, src2: .Right(shift))
 			let shifti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [shifti]
 		case "sllv", "srav", "srlv":
@@ -651,7 +651,7 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			// The register's value is truncated down to the lowest 5 bits to ensure a valid shift range (in real MIPS too)
-			type = .ALUR(op: .Left(args[0] == "sllv" ? { return $0 << ($1 & 0x1F) } : (args[0] == "srav" ? { return $0 >> ($1 & 0x1F)} : { return ($0.unsigned() >> ($1 & 0x1F).unsigned()).signed() })), dest: dest, src1: src1, src2: .Left(src2))
+			type = .ALUR(op: .Left(args[0] == "sllv" ? { return $0 << ($1 & 0x1F) } : (args[0] == "srav" ? { return $0 >> ($1 & 0x1F)} : { return ($0.unsigned >> ($1 & 0x1F).unsigned).signed })), dest: dest, src1: src1, src2: .Left(src2))
 			let shift = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [shift]
 		// MARK: ALU-I instruction parsing
@@ -663,7 +663,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate.parseString(args[3], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: args[0] == "addi" ? (&+) : { return ($0.unsigned() &+ $1.unsigned()).signed() }, dest: dest, src1: src1, src2: src2.0)
+			type = .ALUI(op: args[0] == "addi" ? (&+) : { return ($0.unsigned &+ $1.unsigned).signed }, dest: dest, src1: src1, src2: src2.0)
 			let addi = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [addi]
 		case "andi", "ori", "xori":
@@ -685,7 +685,7 @@ class Instruction: CustomStringConvertible {
 			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), src2 = Immediate.parseString(args[3], canReturnTwo: false) else {
 				return nil
 			}
-			type = .ALUI(op: args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned() < $1.unsigned() ? 1 : 0 }, dest: dest, src1: src1, src2: src2.0)
+			type = .ALUI(op: args[0] == "slti" ? { return $0 < $1 ? 1 : 0} : { return $0.unsigned < $1.unsigned ? 1 : 0 }, dest: dest, src1: src1, src2: src2.0)
 			let slti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [slti]
 		case "lui":
@@ -883,7 +883,7 @@ class Instruction: CustomStringConvertible {
 			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Right({ let fullValue = (args[0] == "mult" ? $0.signed64()&*$1.signed64() : ($0.unsigned64()&*$1.unsigned64()).signed()); return (fullValue.signedUpper32(), fullValue.signedLower32()) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
+			type = .ALUR(op: .Right({ let fullValue = (args[0] == "mult" ? $0.signed64&*$1.signed64 : ($0.unsigned64&*$1.unsigned64).signed); return (fullValue.signedUpper32, fullValue.signedLower32) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
 			let mult = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [mult]
 		case "mul":
@@ -912,7 +912,7 @@ class Instruction: CustomStringConvertible {
 			guard let src1 = Register(args[1], writing: false), src2 = Register(args[2], writing: false) else {
 				return nil
 			}
-			type = .ALUR(op: .Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned(), $1.unsigned()).0.signed(), UInt32.divideWithOverflow($0.unsigned(), $1.unsigned()).0.signed()) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
+			type = .ALUR(op: .Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned, $1.unsigned).0.signed, UInt32.divideWithOverflow($0.unsigned, $1.unsigned).0.signed) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
 			let div = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [div]
 		case "rem", "div":

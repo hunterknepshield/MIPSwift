@@ -41,7 +41,7 @@ extension String {
 	/// is\\ a literal	with escapes." Throws if the literal contains any
 	/// invalid delimiters or contains an escape that is not completed.
 	///
-	/// Axiom: self == self.toEscapedString().toStringWithLiteralEscapes()
+	/// Axiom: self == self.toEscapedString().escapedString
 	///
 	/// - Throws: StringParsingError if self is unable to be escaped.
     func toEscapedString() throws -> String {
@@ -97,36 +97,15 @@ extension String {
         return result
     }
     
-    // Convert a string to a string with literal escape sequences
 	/// Convert a string to a literal with escape sequences expanded. E.g.
-	/// "This is\\ a literal with	escapes." becomes "This is\\\\ a literal
-	/// with\tescapes."
+	/// "This is\\ a literal with
 	///
-	/// Axiom: self == self.toEscapedString().toStringWithLiteralEscapes()
-    func toStringWithLiteralEscapes() -> String {
-        var result = ""
-        for char in self.characters {
-            switch(char) {
-            case "\n":
-                result += "\\n"
-            case "\r":
-                result += "\\r"
-            case "\t":
-                result += "\\t"
-            case "\\":
-                result += "\\\\"
-            case "'":
-                result += "\\'"
-            case "\"":
-                result += "\\\""
-			case "\0":
-				result += "\\0"
-            default:
-                result += "\(char)"
-            }
-        }
-        return result
-    }
+	/// escapes." becomes "This is\\\\ a literal with\nescapes."
+	///
+	/// Axiom: self == self.toEscapedString().escapedString
+	var escapedString: String {
+		get { return self.unicodeScalars.map({ return $0.escape(asASCII: true) }).joinWithSeparator("") }
+	}
 }
 
 // MARK: Convenience print formatting for integer types
@@ -183,13 +162,13 @@ extension Int32 {
         }
     }
     
-    /// Convenience method to format self as hexadecimal with a leading 0x.
-    func toHexWith0x() -> String {
-        if self == 0 {
-            return "0x00000000"
-        }
-        return self.format(PrintOption.HexWith0x.rawValue)
-    }
+    /// Convenience variable of self formatted as hexadecimal with a leading 0x.
+	var hexWith0x: String {
+		get {
+			if self == 0 { return "0x00000000" }
+			return self.format(PrintOption.HexWith0x.rawValue)
+		}
+	}
 }
 
 extension Int16 {
@@ -202,16 +181,18 @@ extension Int16 {
 // MARK: Convenience method to convert unsigned 8-bit integer to printable characters
 
 extension UInt8 {
-	/// Convert self to a printable character, or '.' if an ASCII character with
+	/// Convert self to a printable character, or '•' if an ASCII character with
 	/// a numeric value of self wouldn't be printable in a single space.
-	func toPrintableCharacter() -> Character {
-		switch(self) {
-		case 0...31, 127:
-			return "." // Mostly things that need escaping; can't print
-		case 32...126:
-			return Character(UnicodeScalar(self))
-		default:
-			return "." // Extended ASCII junk
+	var printableCharacter: Character {
+		get {
+			switch(self) {
+			case 0...31, 127:
+				return "•" // Mostly things that need escaping; can't print
+			case 32...126:
+				return Character(UnicodeScalar(self))
+			default:
+				return "•" // Extended ASCII junk
+			}
 		}
 	}
 }
@@ -220,63 +201,38 @@ extension UInt8 {
 
 extension Int16 {
 	// Quick way to convert to an unsigned 16-bit representation of self.
-	func unsigned() -> UInt16 {
-		return UInt16(bitPattern: self)
-	}
+	var unsigned: UInt16 { get { return UInt16(bitPattern: self) } }
 	
 	/// Quick accessor for the lower byte of self as an unsigned 8-bit integer.
-	func unsignedLower8() -> UInt8 {
-		return UInt8(truncatingBitPattern: self.unsigned())
-	}
+	var lowerByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned) } }
 	
 	/// Quick accessor for the upper byte of self as an unsigned 8-bit integer.
-	func unsignedUpper8() -> UInt8 {
-		return UInt8(truncatingBitPattern: self.unsigned() >> 8)
-	}
+	var upperByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 8) } }
 }
 
 extension Int32 {
     /// Quick way to convert to an unsigned 32-bit representation of self.
-    func unsigned() -> UInt32 {
-        return UInt32(bitPattern: self)
-    }
-    
+	var unsigned: UInt32 { get { return UInt32(bitPattern: self) } }
+	
     /// Quick way to convert to a signed 64-bit representation of self.
-    func signed64() -> Int64 {
-        return Int64(self)
-    }
-    
+	var signed64: Int64 { get { return Int64(self) } }
+	
     /// Quick way to convert to an unsigned 64-bit representation of self.
-    func unsigned64() -> UInt64 {
-        return UInt64(bitPattern: self.signed64())
-    }
-    
+	var unsigned64: UInt64 { get { return UInt64(bitPattern: self.signed64) } }
+	
     /// Quick accessor for the lowest byte of self as unsigned an 8-bit integer.
-    func unsignedLowest8() -> UInt8 {
-        return UInt8(truncatingBitPattern: self.unsigned())
-    }
+	var lowestByte: UInt8 { get {return UInt8(truncatingBitPattern: self.unsigned) } }
 	
 	/// Quick accessor for the lower byte of self as unsigned an 8-bit integer.
-    func unsignedLower8() -> UInt8 {
-        return UInt8(truncatingBitPattern: self.unsigned() >> 8)
-    }
+	var lowerByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 8)} }
 
 	/// Quick accessor for the higher byte of self as unsigned an 8-bit integer.
-	func unsignedHigher8() -> UInt8 {
-        return UInt8(truncatingBitPattern: self.unsigned() >> 16)
-    }
+	var higherByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 16) } }
 	
 	/// Quick accessor for the highest byte of self as unsigned an 8-bit
 	/// integer.
-    func unsignedHighest8() -> UInt8 {
-        return UInt8(truncatingBitPattern: self.unsigned() >> 24)
-    }
-    
-    /// Quick accessor for all bytes of self as unsigned 8-bit integers.
-    func toBytes() -> (highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8) {
-        return (self.unsignedHighest8(), self.unsignedHigher8(), self.unsignedLower8(), self.unsignedLowest8())
-    }
-    
+	var highestByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 24) } }
+	
     /// Create a 32-bit signed integer from 4 unsigned 8-bit integers.
     init(highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8) {
         self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
@@ -285,45 +241,31 @@ extension Int32 {
 
 extension UInt32 {
     /// Quick way to convert to a signed 32-bit representation of self.
-    func signed() -> Int32 {
-        return Int32(bitPattern: self)
-    }
+	var signed: Int32 { get { return Int32(bitPattern: self) } }
 }
 
 extension Int64 {
     /// Quick way to convert to an unsigned 64-bit representation of self.
-    func unsigned() -> UInt64 {
-        return UInt64(bitPattern: self)
-    }
+	var unsigned: UInt64 { get { return UInt64(bitPattern: self) } }
 
     /// Quick way to convert lower 32 bits of self to an unsigned 32-bit
 	/// representation.
-    func unsignedLower32() -> UInt32 {
-        return UInt32(truncatingBitPattern: self.unsigned())
-    }
+	var unsignedLower32: UInt32 { get { return UInt32(truncatingBitPattern: self.unsigned) } }
     
     /// Quick way to convert lower 32 bits of self to a signed 32-bit
 	/// representation.
-    func signedLower32() -> Int32 {
-        return self.unsignedLower32().signed()
-    }
+	var signedLower32: Int32 { get { return self.unsignedLower32.signed } }
     
     /// Quick way to convert upper 32 bits of self to an unsigned 32-bit
 	/// representation.
-    func unsignedUpper32() -> UInt32 {
-        return UInt32(truncatingBitPattern: self.unsigned() >> 32)
-    }
+	var unsignedUpper32: UInt32 { get { return UInt32(truncatingBitPattern: self.unsigned >> 32) } }
     
     /// Quick way to convert upper 32 bits of self to a signed 32-bit
 	/// representation.
-    func signedUpper32() -> Int32 {
-        return self.unsignedUpper32().signed()
-    }
+	var signedUpper32: Int32 { get { return self.unsignedUpper32.signed } }
 }
 
 extension UInt64 {
     /// Quick way to convert to a signed 64-bit representation of self.
-    func signed() -> Int64 {
-        return Int64(bitPattern: self)
-    }
+	var signed: Int64 { get { return Int64(bitPattern: self) } }
 }
