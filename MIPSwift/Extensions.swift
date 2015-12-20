@@ -27,83 +27,75 @@ extension String {
     }
 }
 
-/// An error thrown from a call of someString.toEscapedString().
-enum StringParsingError: ErrorType {
-	/// This string contained a raw backslash without anything after it.
-	case InvalidEscape
-	/// This string contained a raw double-quote without being escaped.
-	case InvalidDelimiter
-}
-
 extension String {
     /// Convert a string literal read in from input to one that contains escape
-	/// sequences. E.g. "This is\\\\ a literal\twith escapes." becomes "This
-	/// is\\ a literal	with escapes." Throws if the literal contains any
-	/// invalid delimiters or contains an escape that is not completed.
+	/// sequences for storing. E.g. "This is\\ a literal\twith escapes.\n"
+	/// becomes "This is\ a literal	with escapes.
 	///
-	/// Axiom: self == self.toEscapedString().escapedString
+	/// " Fails if the literal contains any invalid delimiters or contains an
+	/// escape that is not completed.
 	///
-	/// - Throws: StringParsingError if self is unable to be escaped.
-    func toEscapedString() throws -> String {
-        var result = ""
-        let escapeSequenceBeginning: Character = "\\"
-        var isInEscapeSequence = false
-        for (index, char) in self.characters.enumerate() {
-            if isInEscapeSequence {
-                isInEscapeSequence = false
-                continue
-            }
-            if char == escapeSequenceBeginning {
-                let next = self.characters[self.characters.startIndex.advancedBy(index + 1)]
-                switch(next) {
-                case "a":
-                    result += "\\a"
-                case "b":
-                    result += "\\b"
-                case "f":
-                    result += "\\f"
-                case "n":
-                    result += "\n"
-                case "r":
-                    result += "\r"
-                case "t":
-                    result += "\t"
-                case "v":
-                    result += "\\v"
-                case "\\":
-                    result += "\\"
-                case "'", "\'":
-                    result += "'"
-                case "\"":
-                    result += "\""
-                case "?":
-                    result += "\\?"
-				case "0":
-					result += "\0"
-                default:
-                    print("Invalid escape sequence: \\\(next)")
-                    throw StringParsingError.InvalidEscape
-                }
-                isInEscapeSequence = true
-            } else {
-                if char == "\"" {
-                    // This character wasn't escaped, so fail
-                    print("Invalid delimiter in string: \(self)")
-                    throw StringParsingError.InvalidDelimiter
-                }
-                result += "\(char)"
-            }
-        }
-        return result
-    }
-    
+	/// Axiom: self == self.compressedEscapes.expandedEscapes
+	var compressedEscapes: String? {
+		get {
+			var result = ""
+			let escapeSequenceBeginning: Character = "\\"
+			var isInEscapeSequence = false
+			for (index, char) in self.characters.enumerate() {
+				if isInEscapeSequence {
+					isInEscapeSequence = false
+					continue
+				}
+				if char == escapeSequenceBeginning {
+					let next = self.characters[self.characters.startIndex.advancedBy(index + 1)]
+					switch(next) {
+					case "a":
+						result += "\\a"
+					case "b":
+						result += "\\b"
+					case "f":
+						result += "\\f"
+					case "n":
+						result += "\n"
+					case "r":
+						result += "\r"
+					case "t":
+						result += "\t"
+					case "v":
+						result += "\\v"
+					case "\\":
+						result += "\\"
+					case "'", "\'":
+						result += "'"
+					case "\"":
+						result += "\""
+					case "?":
+						result += "\\?"
+					case "0":
+						result += "\0"
+					default:
+						// Invalid/incomplete escape sequence, e.g. "\ ", "\1", or "\Q"
+						return nil
+					}
+					isInEscapeSequence = true
+				} else if char == "\"" {
+					// This character wasn't escaped, so fail
+					return nil
+				} else {
+					result += "\(char)"
+				}
+			}
+			return result
+		}
+	}
+	
 	/// Convert a string to a literal with escape sequences expanded. E.g.
 	/// "This is\\ a literal with
 	///
 	/// escapes." becomes "This is\\\\ a literal with\nescapes."
 	///
-	/// Axiom: self == self.toEscapedString().escapedString
-	var escapedString: String {
+	/// Axiom: self == self.compressedEscapes.expandedEscapes
+	var expandedEscapes: String {
 		get { return self.unicodeScalars.map({ return $0.escape(asASCII: true) }).joinWithSeparator("") }
 	}
 }

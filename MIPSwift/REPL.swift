@@ -628,10 +628,10 @@ class REPL {
             return
         }
         switch(syscallCode) {
-        case .PrintInt:
+        case .PrintInt: // Syscall 1
             // Print the integer currently in $a0
             print(self.registers.get(a0.name))
-        case .PrintString:
+        case .PrintString: // Syscall 4
             // Print the string that starts at address $a0 and go until '\0' (0x00) is found
             var address = self.registers.get(a0.name)
 			var charValue = self.memory[address] ?? 0
@@ -639,7 +639,7 @@ class REPL {
 				print(UnicodeScalar(charValue), terminator: "")
 				charValue = self.memory[++address] ?? 0
 			}
-        case .ReadInt:
+        case .ReadInt: // Syscall 5
             // Read an integer from standard input and return it in $v0
             // 32 bits, maximum of 2147483647, minimum of -2147483648
             let inputString: String = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
@@ -649,7 +649,7 @@ class REPL {
 				// Don't print anything, just return 0 in the v0 register
 				self.registers.set(v0.name, 0)
             }
-		case .ReadString:
+		case .ReadString: // Syscall 8
 			// Reads input, storing it in the address supplied in $a0, up to a maximum of
 			// n - 1 characters, padding with '\0' wherever reading stops.
 			let inputString = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding) as! String
@@ -667,24 +667,23 @@ class REPL {
 				}
 				self.memory[address + index] = UInt8(char.value)
 			}
-		case .PrintChar:
+		case .Exit: // Syscall 10
+			// The assembly program has exited, so exit the interpreter as well
+			print("Program terminated with exit code 0.")
+			self.executeCommand(.Exit(code: 0))
+		case .PrintChar: // Syscall 11
 			// Print the ASCII representation of the lowest byte of $a0
 			let byte = self.registers.get(a0.name).lowestByte
-			print(Character(UnicodeScalar(byte)), terminator: "")
-		case .ReadChar:
+			print(UnicodeScalar(byte), terminator: "")
+		case .ReadChar: // Syscall 12
 			// Read an ASCII character into $v0
 			let inputString = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding) as! String
 			if inputString.unicodeScalars.count == 0 {
 				break
 			}
-			print(inputString.escapedString)
 			let char = inputString.unicodeScalars[inputString.unicodeScalars.startIndex]
 			self.registers.set(v0.name, char.value.signed)
-        case .Exit:
-            // The assembly program has exited, so exit the interpreter as well
-            print("Program terminated with exit code 0.")
-			self.executeCommand(.Exit(code: 0))
-        case .Exit2:
+        case .Exit2: // Syscall 17
             // The assembly program has exited with exit code in $a0
             print("Program terminated with exit code \(self.registers.get(a0.name))")
 			self.executeCommand(.Exit(code: self.registers.get(a0.name)))

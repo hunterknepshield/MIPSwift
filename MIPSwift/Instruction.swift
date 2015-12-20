@@ -138,7 +138,7 @@ class Instruction: CustomStringConvertible {
 			var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
 			if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
 				// Add string literal delimiters before and after arguments; only for .ascii/.asciiz
-				string += stringLiteralDelimiter + self.arguments[1].escapedString + stringLiteralDelimiter
+				string += stringLiteralDelimiter + self.arguments[1].expandedEscapes + stringLiteralDelimiter
 			} else if case .Memory(_) = self.type {
 				// Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
 				string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
@@ -519,8 +519,9 @@ class Instruction: CustomStringConvertible {
 						return nil
 					}
 				}
-				guard let escapedArgument = try? rawArgument.toEscapedString() else {
-					return nil // Couldn't escape this string
+				guard let escapedArgument = rawArgument.compressedEscapes else {
+					print("Invalid string literal: \(rawArgument)")
+					return nil
 				}
 				pcIncrement = Int32(escapedArgument.lengthOfBytesUsingEncoding(NSASCIIStringEncoding) + (dotDirective == .Asciiz ? 1 : 0)) // Add 1 for null terminator if needed
 				arguments = [args[0], escapedArgument + (dotDirective == .Asciiz ? "\0" : "")]
