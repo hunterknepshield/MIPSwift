@@ -147,7 +147,7 @@ class Instruction: CustomStringConvertible {
 			} else {
 				// Default formatting for instruction, e.g. add	$t0, $t1, $t2
 				var counter = 0
-				self.arguments[1..<self.arguments.count].forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
+				self.arguments.dropFirst().forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
 			}
 			return string
         }
@@ -404,7 +404,7 @@ class Instruction: CustomStringConvertible {
 			let commentBeginningString = args[commentBeginningIndex]
 			if String(commentBeginningString.characters.first!) == commentDelimiter {
 				// The comment is the start of this argument, just remove this argument and all that follow
-				comment = args[commentBeginningIndex..<args.count].joinWithSeparator(" ")
+				comment = args.dropFirst(commentBeginningIndex + 1).joinWithSeparator(" ")
 				args.removeRange(commentBeginningIndex..<args.count)
 			} else {
 				// The comment begins somewhere else in the argument, e.g. something:#like_this, or $t1, $t1, $t2#this
@@ -412,7 +412,7 @@ class Instruction: CustomStringConvertible {
 				let nonCommentPart = separatedComponents[0]
 				// nonCommentPart is guaranteed to not be the empty string
 				args[commentBeginningIndex] = nonCommentPart // Put the non-comment part back in the arguments
-				let commentParts = separatedComponents[1..<separatedComponents.count] + args[(commentBeginningIndex + 1)..<args.count]
+				let commentParts = Array(separatedComponents.dropFirst()) + Array(args.dropFirst(commentBeginningIndex + 1))
 				comment = commentParts.joinWithSeparator(" ")
 				args.removeRange((commentBeginningIndex + 1)..<args.count) // Remove everything past the comment beginning
 			}
@@ -559,11 +559,11 @@ class Instruction: CustomStringConvertible {
 				var validArgs = true
 				switch(dotDirective) {
 				case .Byte:
-					args[1..<args.count].forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+					args.dropFirst().forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				case .Half:
-					args[1..<args.count].forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+					args.dropFirst().forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				case .Word:
-					args[1..<args.count].forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
+					args.dropFirst().forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				default:
 					// Never reached
 					fatalError("Invalid dot directive: \(dotDirective.rawValue)")
@@ -573,7 +573,7 @@ class Instruction: CustomStringConvertible {
 				}
 				pcIncrement = Int32(argCount)*bytesPerArgument
 			}
-			let directive = Instruction(rawString: string, location: location, pcIncrement: pcIncrement, arguments: arguments, labels: labels, comment: comment, type: .Directive(directive: dotDirective, args: Array(arguments[1..<arguments.count])))
+			let directive = Instruction(rawString: string, location: location, pcIncrement: pcIncrement, arguments: arguments, labels: labels, comment: comment, type: .Directive(directive: dotDirective, args: Array(arguments.dropFirst())))
 			return [directive]
 		}
 		
@@ -713,7 +713,7 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			let storing = args[0].characters.first! == "s"
-			let size = args[0][1] == "b" ? 0 : args[0][1] == "h" ? 1 : 2
+			let size = args[0].characters[1] == "b" ? 0 : (args[0].characters[1] == "h" ? 1 : 2)
 			let unsigned = args[0].characters.count == 3
 			guard let memReg = Register(args[1], writing: !storing), offset = Immediate.parseString(args[2], canReturnTwo: false), addr = Register(args[3], writing: false) else {
 				return nil

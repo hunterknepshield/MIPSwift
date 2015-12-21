@@ -10,21 +10,16 @@ import Foundation
 
 // MARK: String subscripting
 
-extension String {
-	/// Get the ith element of self as a Character.
-    subscript(i: Int) -> Character {
-        return self[self.startIndex.advancedBy(i)]
-    }
-	
-	/// Get the ith element of self as a String.
-    subscript(i: Int) -> String {
-        return String(self[i] as Character)
-    }
+extension String.CharacterView {
+	/// Get the ith element of self.
+	subscript(i: Int) -> Character {
+		return self[self.startIndex.advancedBy(i)]
+	}
 	
 	/// Get a range of elements of self as a string.
-    subscript(r: Range<Int>) -> String {
-        return substringWithRange(Range(start: startIndex.advancedBy(r.startIndex), end: startIndex.advancedBy(r.endIndex)))
-    }
+	subscript(r: Range<Int>) -> String {
+		return String(self[Range(start: self.startIndex.advancedBy(r.startIndex), end: self.startIndex.advancedBy(r.endIndex))])
+	}
 }
 
 // MARK: String escape sequence manipulation
@@ -45,11 +40,16 @@ extension String {
 			var isInEscapeSequence = false
 			for (index, char) in self.characters.enumerate() {
 				if isInEscapeSequence {
+					// Don't need to do anything; already did the lookahead
 					isInEscapeSequence = false
 					continue
 				}
 				if char == escapeSequenceBeginning {
-					let next = self.characters[self.characters.startIndex.advancedBy(index + 1)]
+					if index == self.characters.count - 1 {
+						// This is a raw backslash at the very end of the string, e.g. "Something like this\"
+						return nil
+					}
+					let next = self.characters[index + 1]
 					switch(next) {
 					case "a":
 						result += "\\a"
@@ -112,7 +112,7 @@ extension Int32 {
             let hexString = self.format(PrintOption.Hex.rawValue)
             var binaryString = ""
             for i in 0..<hexString.characters.count {
-                let char: Character = hexString[i]
+                let char = hexString.characters[i]
                 switch(char) {
                 case "0":
                     binaryString += "0000"

@@ -391,9 +391,10 @@ class REPL {
                     // Make new lines every 16 bytes (4 words)
 					print("[\((location + counter*4).hexWith0x)]", terminator: "\t")
                 }
-				lineString += ascii[counter*4..<(counter*4 + 4)]
+				lineString += ascii.characters[counter*4..<(counter*4 + 4)]
                 print($0.hexWith0x, terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
 				if counter % 4 == 0 {
+					// Print the ASCII characters for the values in the most recent 16 bytes
 					print("\(lineString)")
 					lineString = ""
 				}
