@@ -29,8 +29,8 @@ enum PrintOption: String, CustomStringConvertible {
     case Hex = "%08x"
 	/// 8 hex digits with a leading 0x, filling in with 0.
     case HexWith0x = "%#010x"
-	/// 10 decimal digits, filling in with 0.
-    case Decimal = "%010d"
+	/// 11 decimal digits, filling in with 0.
+    case Decimal = "%011d"
 	/// 11 octal digits, filling in with 0.
     case Octal = "%011o"
 	/// 32 binary digits, filling in with 0.

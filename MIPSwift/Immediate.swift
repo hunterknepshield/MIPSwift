@@ -41,24 +41,22 @@ struct Immediate {
 			// Attempt to parse hexadecimal if possible, otherwise fail
 			if valid16BitHexRegex.test(string) {
 				// This should fit within a 16-bit integer
+				var value = UINT32_MAX
 				let scanner = NSScanner(string: string)
-				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-				if scanner.scanHexInt(pointer) {
+				if scanner.scanHexInt(&value) {
 					// Safe to make an Int16 from this value; bit length already checked
-					return (Immediate(Int16(truncatingBitPattern: pointer.memory)), nil)
+					return (Immediate(Int16(truncatingBitPattern: value)), nil)
 				} else {
 					print("Unable to create immediate value from string: \(string)")
 					return nil
 				}
 			} else if canReturnTwo && valid32BitHexRegex.test(string) {
 				// This should fit within a 32-bit integer, and we're allowed to make 2
+				var value = UINT32_MAX
 				let scanner = NSScanner(string: string)
-				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-				if scanner.scanHexInt(pointer) {
+				if scanner.scanHexInt(&value) {
 					// Safe to make an Int32 from this value; bit length already checked
-					let twoImms = Int32(bitPattern: pointer.memory)
+					let twoImms = Int32(bitPattern: value)
 					return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
 				} else {
 					print("Unable to create immediate value from string: \(string)")

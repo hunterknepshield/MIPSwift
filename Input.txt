@@ -73,5 +73,5 @@ done:
 #		la	$a0, read_string
 #		li	$a1, 32
 #		syscall
-		li	$v0, 12
+		li	$v0, 31
 		syscall

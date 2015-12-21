@@ -7,6 +7,8 @@
 //
 
 import Foundation
+// import CoreAudio
+import CoreMIDI
 
 /// A read-eval-print loop for interpreting MIPS assembly instructions.
 class REPL {
@@ -80,8 +82,8 @@ class REPL {
         self.registers.set(sp.name, beginningSp)
     }
 	
-	/// Begin reading input. This function will continue running until either
-	/// an error occurs within Swift itself, or the :exit command is used.
+	/// Begin reading input. This function will continue running until either an
+	/// error occurs within the interpreter itself, or the :exit command is used.
     @noreturn func run() {
         if self.usingFile {
             print("Reading file.")
@@ -683,10 +685,64 @@ class REPL {
 			}
 			let char = inputString.unicodeScalars[inputString.unicodeScalars.startIndex]
 			self.registers.set(v0.name, char.value.signed)
+		// Syscalls 13-16 are scary file stuff
         case .Exit2: // Syscall 17
             // The assembly program has exited with exit code in $a0
             print("Program terminated with exit code \(self.registers.get(a0.name))")
 			self.executeCommand(.Exit(code: self.registers.get(a0.name)))
+		case .Time: // Syscall 30
+			// Return the low-order bits of the system time in $a0, high-order bits in $a1
+			let current = NSDate().timeIntervalSince1970 as Double // Number of seconds since 1/1/1970
+			let int = Int64(current*1000) // Number of milliseconds (rounded) since 1/1/1970
+			self.registers.set(a0.name, int.unsignedLower32.signed)
+			self.registers.set(a1.name, int.unsignedUpper32.signed)
+		case .MidiOut: // Syscall 31
+			// $a0 = pitch, $a1 = duration (milliseconds), $a2 = instrument, $a3 = volume
+			let pitch: Int
+			let a0Value = self.registers.get(a0.name)
+			if 0...127 ~= a0Value {
+				pitch = Int(a0Value)
+			} else {
+				pitch = 60 // Middle C
+			}
+			let duration: Int
+			let a1Value = self.registers.get(a1.name)
+			if a1Value < 0 {
+				duration = 1000
+			} else {
+				duration = Int(a1Value)
+			}
+			let instrument: Int
+			let a2Value = self.registers.get(a2.name)
+			if 0...127 ~= a2Value {
+				instrument = Int(a2Value)
+			} else {
+				instrument = 0 // Acoustic grand piano
+			}
+			let volume: Int
+			let a3Value = self.registers.get(a3.name)
+			if 0...127 ~= a3Value {
+				volume = Int(a3Value)
+			} else {
+				volume = 100
+			}
+			// soundManager.play(440.0, modulatorFrequency: 679.0, modulatorAmplitude: 0.8)
+		case .Sleep: // Syscall 32
+			// Sleep for $a0 milliseconds
+			let time = self.registers.get(a0.name).unsigned
+			sleep(time)
+		case .PrintIntHex: // Syscall 34
+			// Print $a0 in hex
+			let value = self.registers.get(a0.name)
+			print(value.format(PrintOption.Hex.rawValue), terminator: "")
+		case .PrintIntBinary: // Syscall 35
+			// Print $a0 in binary
+			let value = self.registers.get(a0.name)
+			print(value.format(PrintOption.Binary.rawValue), terminator: "")
+		case .PrintIntUnsigned: // Syscall 36
+			// Print $a0 as an unsigned value in decimal
+			let value = self.registers.get(a0.name).unsigned
+			print(value, terminator: "")
         default:
 			// Either actually invalid or just unimplemented
             print("Invalid syscall code: \(self.registers.get(v0.name))")

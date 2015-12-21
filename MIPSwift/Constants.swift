@@ -27,6 +27,8 @@ let stdIn = NSFileHandle.fileHandleWithStandardInput()
 /// an instruction; makes memory dump reading simpler to find unresolved
 /// instructions. Binary encoding: 1010 1010 1010 1010.
 let aaaa = Immediate.parseString("0xAAAA", canReturnTwo: false)!.0
+/// The tone generator used for all MIDI syscalls.
+let soundManager = SoundManager()
 
 // MARK: Register parsing constants
 

@@ -130,12 +130,11 @@ enum Command {
 				location = .Right(args[0])
 			} else {
 				// Attempt to read a hex value
+				var value = UINT32_MAX
 				let scanner = NSScanner(string: args[0])
-				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-				if scanner.scanHexInt(pointer) /*&& pointer.memory < UINT32_MAX */{
+				if scanner.scanHexInt(&value) {
 					// Safe to make an Int32 from this value
-					location = .Left(Int32(pointer.memory))
+					location = .Left(value.signed)
 				} else {
 					// Unsafe to make an Int32 from this value, just complain
 					print("Invalid location: \(args[0])")
@@ -172,12 +171,11 @@ enum Command {
 				location = .Right(args[0])
 			} else if valid32BitHexRegex.test(args[0]) {
 				// Attempt to read a hex value
+				var value = UINT32_MAX
 				let scanner = NSScanner(string: args[0])
-				let pointer = UnsafeMutablePointer<UInt32>.alloc(1)
-				defer { pointer.dealloc(1) } // Called when execution leaves the current scope
-				if scanner.scanHexInt(pointer) /*&& pointer.memory < UINT32_MAX */{
+				if scanner.scanHexInt(&value) {
 					// Safe to make an Int32 from this value
-					let address = pointer.memory.signed
+					let address = value.signed
 					if address % 4 != 0 {
 						print("Unaligned memory address: \(address.hexWith0x)")
 						return nil
