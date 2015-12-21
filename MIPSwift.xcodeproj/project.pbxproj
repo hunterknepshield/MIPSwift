@@ -48,6 +48,7 @@
 		5A5AE3911C1CC25C005C01DB /* Input.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Input.txt; sourceTree = "<group>"; };
 		5A5AE3921C1D163C005C01DB /* Either.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Either.swift; sourceTree = "<group>"; };
 		5A7D46331C196CD200615B1D /* Constants.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
+		5A8017291C27E92E00367081 /* Totient */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Totient; sourceTree = "<group>"; };
 		5AA61BB21C195244007F1409 /* MIPSwift */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MIPSwift; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AA61BB51C195244007F1409 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		5AA61BC01C19529B007F1409 /* RegisterFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RegisterFile.swift; sourceTree = "<group>"; };
@@ -70,14 +71,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		5AA61BA91C195244007F1409 = {
+		5A80172A1C27E94600367081 /* Sample Inputs */ = {
 			isa = PBXGroup;
 			children = (
 				5A5AE3911C1CC25C005C01DB /* Input.txt */,
+				5A8017291C27E92E00367081 /* Totient */,
+			);
+			name = "Sample Inputs";
+			sourceTree = "<group>";
+		};
+		5AA61BA91C195244007F1409 = {
+			isa = PBXGroup;
+			children = (
 				5AA9EF241C1C0E4500D24058 /* LICENSE.txt */,
 				5A329D5C1C1C23D000CC0D6C /* README.md */,
 				5AA61BB41C195244007F1409 /* MIPSwift */,
 				5AA61BB31C195244007F1409 /* Products */,
+				5A80172A1C27E94600367081 /* Sample Inputs */,
 			);
 			sourceTree = "<group>";
 		};

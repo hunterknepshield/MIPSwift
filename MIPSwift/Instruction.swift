@@ -347,7 +347,13 @@ class Instruction: CustomStringConvertible {
 			let newImm = Immediate(Int16(truncatingBitPattern: offset >> 2))
 			// Instructions are always aligned to a 4-byte boundary, so the offset can safely be shifted down 2 here
 			// without losing any information; just need to bitshift back up on the way out during execution
-			self.arguments[3] = "\(newImm.value)"
+			if src2 == nil {
+				// Comparing with 0, no second register argument
+				self.arguments[2] = "\(newImm.value)"
+			} else {
+				// Comparing with a second register
+				self.arguments[3] = "\(newImm.value)"
+			}
 			self.type = .Branch(op: op, link: link, src1: src1, src2: src2, dest: newImm)
 		case let .ALUI(op, dest, src1, _):
 			// This comes from the la instruction, which is decomposed into a lui and ori combination
@@ -752,7 +758,7 @@ class Instruction: CustomStringConvertible {
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			equal.unresolvedDependencies.append(args[3])
 			return [equal]
-		case "bgez", "bgezal", "bltz", "bltzal", "bgtz", "bltez":
+		case "bgez", "bgezal", "bltz", "bltzal", "bgtz", "blez":
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
@@ -770,7 +776,7 @@ class Instruction: CustomStringConvertible {
 				op = (<)
 			case "bgtz":
 				op = (>)
-			case "bltez":
+			case "blez":
 				op = (<=)
 			default:
 				fatalError("Invalid branch instruction \(args[0])")

@@ -248,12 +248,20 @@ class REPL {
 	func resumeExecution(fromJump: Bool = false) {
 		self.currentlyResuming = true
 		
+		let restoreWritingData: Bool
+		if self.writingData {
+			self.writingData = false // In case a .data directive was last executed
+			restoreWritingData = true
+		} else {
+			restoreWritingData = false
+		}
+		
 		if !fromJump {
 			print("Resuming execution...")
 		}
 		
-        // Auto-execute was disabled, so resume execution from the instruction at self.pausedTextLocation
-        // Alternatively, if lastExecutedInstructionLocation's lookup is nil, nothing was ever executed, so start from the beginning
+        // If fromJump is false, auto-execute was disabled, so resume execution from the instruction at self.pausedTextLocation
+		// If fromJump is true, resume execution from the current program counter, since a jump was taken
 		var currentInstruction = locationsToInstructions[fromJump ? self.currentTextLocation : (self.pausedTextLocation ?? 0)]
         while currentInstruction != nil {
             // Execute the current instruction, then execute the next instruction, etc. until nil is found
@@ -267,6 +275,9 @@ class REPL {
 		
 		// Update the pausedTextLocation to note that execution has come this far, or wipe it if auto-execute is enabled
 		self.pausedTextLocation = self.autoexecute ? nil : self.currentTextLocation
+		if restoreWritingData {
+			self.writingData = true
+		}
 		self.currentlyResuming = false
     }
 	
@@ -344,7 +355,7 @@ class REPL {
 			for i in 0..<count {
 				// Instructions are on 4-byte boundaries
 				if let instruction = locationsToInstructions[location + 4*i] {
-					print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue)))")
+					print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue))")
 				} else {
 					print("\t\((location + 4*i).hexWith0x):\t(undefined)")
 				}
@@ -688,7 +699,7 @@ class REPL {
 		// Syscalls 13-16 are scary file stuff
         case .Exit2: // Syscall 17
             // The assembly program has exited with exit code in $a0
-            print("Program terminated with exit code \(self.registers.get(a0.name))")
+            print("Program terminated with exit code \(self.registers.get(a0.name)).")
 			self.executeCommand(.Exit(code: self.registers.get(a0.name)))
 		case .Time: // Syscall 30
 			// Return the low-order bits of the system time in $a0, high-order bits in $a1
