@@ -29,7 +29,7 @@ test:	li  $t3, 32767			# INT16_MAX (0x7fff)
 		li  $v0, 5
 		li	$s0, 65
 		li	$s1, 66
-		li	$s2, 67
+		li	$s2, 200
 		sw	$s0, 0($sp)
 		sw	$s1, 4($sp)
 		sw	$s2, -4($sp)
@@ -73,5 +73,3 @@ done:
 #		la	$a0, read_string
 #		li	$a1, 32
 #		syscall
-		li	$v0, 31
-		syscall

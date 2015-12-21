@@ -10,20 +10,20 @@ import Foundation
 
 print("MIPSwift v\(mipswiftVersion)")
 
-let args = Process.arguments
-var printUsage = false
+let executableArgs = Process.arguments
+var printUsageAndTerminate = false
 var useDeveloperOptions = false
 var defaultOptions = REPLOptions() // verbose = false, autodump = false, autoexecute = true, trace = false, printSetting = .Hex, inputSource = stdIn, usingFile = false
 var developerOptions = REPLOptions(verbose: false, autodump: true, autoexecute: false, trace: true, printSetting: .Hex, inputSource: stdIn, usingFile: false)
 
 // Parse command line arguments if there are any
-for (index, argument) in args.enumerate() {
+for (index, argument) in executableArgs.enumerate() {
     // print("\(index): \(argument)")
     if index == 0 {
         // This is the executable's name, nothing exciting to parse
         continue
     } else {
-        if ["-f", "--file", "--filename"].contains(args[index - 1]) {
+        if ["-f", "--file", "--filename"].contains(executableArgs[index - 1]) {
             // This was the file's name, just skip it
             continue
         }
@@ -36,9 +36,9 @@ for (index, argument) in args.enumerate() {
         // developerOptions.autoexecute is already false
     case "-f", "--file", "--filename":
         // The user is specifying a file name to read from
-        if index < args.count - 1 {
+        if index < executableArgs.count - 1 {
             // There's at least 1 more argument, assume it's the file name
-            let filename = args[index + 1]
+            let filename = executableArgs[index + 1]
             guard let fileHandle = NSFileHandle(forReadingAtPath: filename) else {
                 fatalError("Unable to open file: \(filename)")
             }
@@ -54,12 +54,12 @@ for (index, argument) in args.enumerate() {
         }
     default:
         print("Illegal argument: \(argument)")
-        printUsage = true
+        printUsageAndTerminate = true
     }
 }
 
-if printUsage {
-    print("Usage: \(args[0]) \(commandLineOptions)")
+if printUsageAndTerminate {
+    print("Usage: \(executableArgs[0]) \(commandLineOptions)")
     print("\td: start with 'developer' interpreter settings by default (auto-dump on, auto-execute off, trace on).")
     print("\tnoae: start auto-execute off.")
     print("\tf file: open file instead of reading instructions from standard input.")

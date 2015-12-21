@@ -21,16 +21,16 @@ enum DotDirective: String {
     case Global = ".globl"
 	/// Align to a 2^n-byte boundary.
     case Align = ".align"
-	/// Allocate n bytes of space
+	/// Allocate n bytes of space.
     case Space = ".space"
-	/// Store 4-byte values with initial values supplied
+	/// Store 4-byte values with initial values supplied.
     case Word = ".word"
-	/// Store 2-byte values with initial values supplied
+	/// Store 2-byte values with initial values supplied.
     case Half = ".half"
-	/// Store 1-byte values with initial values supplied
+	/// Store 1-byte values with initial values supplied.
     case Byte = ".byte"
-	/// Store a non-null-terminated string
+	/// Store a non-null-terminated string.
     case Ascii = ".ascii"
-	/// Store a null-terminated string
+	/// Store a null-terminated string.
     case Asciiz = ".asciiz"
 }

@@ -5,8 +5,8 @@
 //  Created by Hunter Knepshield on 12/20/15.
 //  Copyright © 2015 Hunter Knepshield. All rights reserved.
 //
+
 // Original source: https://gist.github.com/rgcottrell/5b876d9c5eea4c9e411c
-//
 
 import Foundation
 import AVFoundation

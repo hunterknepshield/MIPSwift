@@ -7,8 +7,6 @@
 //
 
 import Foundation
-// import CoreAudio
-import CoreMIDI
 
 /// A read-eval-print loop for interpreting MIPS assembly instructions.
 class REPL {
@@ -83,7 +81,7 @@ class REPL {
     }
 	
 	/// Begin reading input. This function will continue running until either an
-	/// error occurs within the interpreter itself, or the :exit command is used.
+	/// error occurs within the interpreter itself or the exit command is used.
     @noreturn func run() {
         if self.usingFile {
             print("Reading file.")
@@ -383,7 +381,7 @@ class REPL {
 				let higher = self.memory[address + 1] ?? 0
 				let lower = self.memory[address + 2] ?? 0
 				let lowest = self.memory[address + 3] ?? 0
-				words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest))
+				words.append(Int32(highest: highest, higher: higher, lower: lower, lowest: lowest, extendValue: 0))
 				ascii += "\(highest.printableCharacter)\(higher.printableCharacter)\(lower.printableCharacter)\(lowest.printableCharacter)"
             }
             var counter = 0 // For formatting individual lines
@@ -529,7 +527,7 @@ class REPL {
             let src1Value = self.registers.get(src1.name)
 			let result = op(src1Value, src2.signExtended)
 			self.registers.set(dest.name, result)
-        case let .Memory(storing, size, memReg, offset, addrReg):
+        case let .Memory(storing, unsigned, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
@@ -555,7 +553,7 @@ class REPL {
                     self.memory[address + 3] = valueToStore.lowestByte
                 default:
                     // Never reached
-                    fatalError("Invalid size of store word: \(size)")
+                    fatalError("Invalid size for store: \(size)")
                 }
             } else {
                 // Loading a value from memory into memReg
@@ -563,20 +561,22 @@ class REPL {
                 switch(size) {
                 case 0:
                     // Loading a single byte
-                    loadedValue = Int32(highest: 0, higher: 0, lower: 0, lowest: self.memory[address] ?? 0)
+					loadedValue = Int32(highest: 0, higher: 0, lower: 0, lowest: self.memory[address] ?? 0, extendValue: unsigned ? 0 : 1)
+					print(loadedValue.hexWith0x)
                 case 1:
                     // Loading a half-word
-                    loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 1] ?? 0)
+					loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 1] ?? 0, extendValue: unsigned ? 0 : 2)
+					print(loadedValue.hexWith0x)
                 case 2:
                     // Loading a word
                     let highest = self.memory[address] ?? 0
                     let higher = self.memory[address + 1] ?? 0
                     let lower = self.memory[address + 2] ?? 0
                     let lowest = self.memory[address + 3] ?? 0
-                    loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest)
+					loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest, extendValue: 0)
                 default:
                     // Never reached
-                    fatalError("Invalid size of load word: \(size)")
+                    fatalError("Invalid size for load: \(size)")
                 }
                 self.registers.set(memReg.name, loadedValue)
             }
@@ -707,6 +707,7 @@ class REPL {
 			let int = Int64(current*1000) // Number of milliseconds (rounded) since 1/1/1970
 			self.registers.set(a0.name, int.unsignedLower32.signed)
 			self.registers.set(a1.name, int.unsignedUpper32.signed)
+		/*
 		case .MidiOut: // Syscall 31
 			// $a0 = pitch, $a1 = duration (milliseconds), $a2 = instrument, $a3 = volume
 			let pitch: Int
@@ -738,6 +739,7 @@ class REPL {
 				volume = 100
 			}
 			// soundManager.play(440.0, modulatorFrequency: 679.0, modulatorAmplitude: 0.8)
+		*/
 		case .Sleep: // Syscall 32
 			// Sleep for $a0 milliseconds
 			let time = self.registers.get(a0.name).unsigned

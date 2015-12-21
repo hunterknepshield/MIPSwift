@@ -27,6 +27,8 @@ extension String {
     }
 }
 
+// MARK: String escape sequence manipulation
+
 extension String {
     /// Convert a string literal read in from input to one that contains escape
 	/// sequences for storing. E.g. "This is\\ a literal\twith escapes.\n"
@@ -213,21 +215,39 @@ extension Int32 {
 	var unsigned64: UInt64 { get { return UInt64(bitPattern: self.signed64) } }
 	
     /// Quick accessor for the lowest byte of self as unsigned an 8-bit integer.
-	var lowestByte: UInt8 { get {return UInt8(truncatingBitPattern: self.unsigned) } }
+	var lowestByte: UInt8 { get {return UInt8(truncatingBitPattern: self) } }
 	
 	/// Quick accessor for the lower byte of self as unsigned an 8-bit integer.
-	var lowerByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 8)} }
+	var lowerByte: UInt8 { get { return UInt8(truncatingBitPattern: self >> 8)} }
 
 	/// Quick accessor for the higher byte of self as unsigned an 8-bit integer.
-	var higherByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 16) } }
+	var higherByte: UInt8 { get { return UInt8(truncatingBitPattern: self >> 16) } }
 	
 	/// Quick accessor for the highest byte of self as unsigned an 8-bit
 	/// integer.
-	var highestByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 24) } }
+	var highestByte: UInt8 { get { return UInt8(truncatingBitPattern: self >> 24) } }
 	
-    /// Create a 32-bit signed integer from 4 unsigned 8-bit integers.
-    init(highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8) {
-        self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
+    /// Create a 32-bit signed integer from 4 unsigned 8-bit integers, extending
+	/// the specified byte, starting at 1 from lowest order, or 0 for no
+	/// extension. Assumes all bytes above the byte to be sign-extended are 0.
+	init(highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8, extendValue: Int) {
+		assert(0...4 ~= extendValue, "Invalid extendValue: \(extendValue)") // extendValue must be between 0 and 4, inclusive
+		switch(extendValue) {
+		case 0, 4:
+			// Don't sign-extend any bytes (equivalent of sign-extending the highest byte, but there's nowhere to extend
+			self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
+		case 1:
+			// Sign-extend the lowest byte; assumes higher bytes are all 0
+			self = Int32(Int8(bitPattern: lowest))
+		case 2:
+			// Sign-extend the lower byte; assumes higher bytes are both 0
+			self = (Int32(Int8(bitPattern: lower)) << 8) | Int32(lowest)
+		case 3:
+			// Sign-extend the higher byte; assumes higest byte is 0
+			self = (Int32(Int8(bitPattern: higher)) << 16) | (Int32(lower) << 8) | Int32(lowest)
+		default:
+			fatalError("Invalid")
+		}
     }
 }
 

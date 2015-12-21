@@ -58,13 +58,15 @@ enum InstructionType {
 	/// - Parameters:
 	///		- storing: Used to determine if this instruction performs a store
 	///		operation or not.
+	///		- unsigned: Used to determine if this instruction performs an
+	///		unsigned load operation or not.
 	///		- size: Used to determine the number of bytes to load or store. This
 	///		value is a power of 2. 0 = byte, 1 = half-word, 2 = word.
 	///		- memReg: The register that the value will be stored from or loaded
 	///		into.
 	///		- offset: The offset for calculation of the effective address.
 	///		- addr: The register for calculation of the effective address.
-	case Memory(storing: Bool, size: Int, memReg: Register, offset: Immediate, addr: Register)
+	case Memory(storing: Bool, unsigned: Bool, size: Int, memReg: Register, offset: Immediate, addr: Register)
 	/// An unconditional jump instruction.
 	///
 	/// - Parameters:
@@ -229,7 +231,7 @@ class Instruction: CustomStringConvertible {
 					return INT32_MAX
 				}
 				encoding |= opcode << oShift
-			case let .Memory(_, _, dest, offset, addr):
+			case let .Memory(_, _, _, dest, offset, addr):
 				// Format for I-type instructions is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
 				encoding |= dest.number << tShift
@@ -259,8 +261,7 @@ class Instruction: CustomStringConvertible {
 					encoding |= address & 0x03FFFFFF // Only want 26 bits
 				}
 			case let .Branch(_, _, src1, src2, dest):
-				// Again don't know how to generate offset without information from the outside world
-				// Additionally, branches that compare with zero have different values for t
+				// Branches that compare with zero have different values for t
 				// bgez = 00001 = 1, bgezal = 10001 = 17, bgtz = 00000 = 0,
 				// bltz = 00000 = 0, bltzal = 10000 = 16, blez = 00000 = 0
 				// Branch instructions are I-type, so their format is
@@ -293,7 +294,6 @@ class Instruction: CustomStringConvertible {
 				}
 				encoding |= opcode << oShift
 				encoding |= dest.unsignedExtended.signed
-				break
 			case .Syscall:
 				// Technically an R-type instruction; everything but function code is 0
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
@@ -402,7 +402,7 @@ class Instruction: CustomStringConvertible {
 		let argumentContainsComment = args.map({ $0.containsString(commentDelimiter) })
 		if let commentBeginningIndex = argumentContainsComment.indexOf(true) {
 			let commentBeginningString = args[commentBeginningIndex]
-			if commentBeginningString[0] == commentDelimiter {
+			if String(commentBeginningString.characters.first!) == commentDelimiter {
 				// The comment is the start of this argument, just remove this argument and all that follow
 				comment = args[commentBeginningIndex..<args.count].joinWithSeparator(" ")
 				args.removeRange(commentBeginningIndex..<args.count)
@@ -426,7 +426,7 @@ class Instruction: CustomStringConvertible {
 		// Label identification: if anything at the beginning of arguments ends with a colon,
 		// then remove it from arguments to be parsed and add it to this instruction's labels array
 		var labels = [String]()
-		while args.count > 0 && args[0][args[0].characters.count - 1] == labelDelimiter {
+		while args.count > 0 && String(args[0].characters.last!) == labelDelimiter {
 			// Loop for all labels before the actual instruction arguments
 			let fullString = args.removeFirst()
 			let splitLabels = fullString.componentsSeparatedByString(labelDelimiter).filter({ return !$0.isEmpty })
@@ -453,7 +453,7 @@ class Instruction: CustomStringConvertible {
 		}
 		
 		let argCount = args.count - 1 // Don't count the actual instruction
-		if args[0][0] == directiveDelimiter {
+		if String(args[0].characters.first!) == directiveDelimiter {
 			// MARK: Directive parsing
 			// Requires a significant amount of additional parsing to make sure arguments are in order
 			// Parsing runs under the assumption that this instruction will immediately be executed,
@@ -707,17 +707,18 @@ class Instruction: CustomStringConvertible {
 			let lui = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [lui]
 		// MARK: Memory instruction parsing
-		case "lw", "lh", "lb", "sw", "sh", "sb":
+		case "lw", "lh", "lhu", "lb", "lbu", "sw", "sh", "sb":
 			if argCount != 3 {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			let storing = args[0][0] == "s"
+			let storing = args[0].characters.first! == "s"
 			let size = args[0][1] == "b" ? 0 : args[0][1] == "h" ? 1 : 2
+			let unsigned = args[0].characters.count == 3
 			guard let memReg = Register(args[1], writing: !storing), offset = Immediate.parseString(args[2], canReturnTwo: false), addr = Register(args[3], writing: false) else {
 				return nil
 			}
-			type = .Memory(storing: storing, size: size, memReg: memReg, offset: offset.0, addr: addr)
+			type = .Memory(storing: storing, unsigned: unsigned, size: size, memReg: memReg, offset: offset.0, addr: addr)
 			let memory = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [memory]
 		// MARK: Jump instruction parsing

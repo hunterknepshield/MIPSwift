@@ -85,10 +85,10 @@ enum Command {
             self = .NoOp
             return
         }
-        let strippedString = string[1..<string.characters.count] // Remove the commandDelimiter character
+		let strippedString = String(string.characters.dropFirst())
         let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
-        let command = commandAndArgs[0]
-        let args = Array(commandAndArgs[1..<commandAndArgs.count])
+		let command = commandAndArgs.first!
+		let args = Array(commandAndArgs.dropFirst()) // May be empty
 		let argCount = args.count
         switch(command) {
         case "autoexecute", "ae":
