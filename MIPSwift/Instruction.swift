@@ -809,7 +809,17 @@ class Instruction: CustomStringConvertible {
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(src.0.value)", location: location + 4, verbose: false)![0]
+			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(src.0.value)", location: location + lui.pcIncrement, verbose: false)![0]
+			switch(ori.type) {
+			case let .ALUI(_, dest, src1, src2):
+				// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
+				// Otherwise, li $d, 32768 (INT16_MAX + 1) will return 0xFFFF8000 when it should return 0x00008000
+				let op: Operation32 = { return $0 | ($1 & 0xFFFF) }
+				ori.type = .ALUI(op: op, dest: dest, src1: src1, src2: src2)
+			default:
+				// Never reached
+				fatalError("Invalid ori instruction: \(ori)")
+			}
 			return [lui, ori]
 		case "la":
 			// Pseudo instruction to load a 32-bit address of a label into a register
@@ -827,8 +837,18 @@ class Instruction: CustomStringConvertible {
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(aaaa.value)", location: location + 4, verbose: false)![0]
+			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(aaaa.value)", location: location + lui.pcIncrement, verbose: false)![0]
 			ori.unresolvedDependencies.append(args[2])
+			switch(ori.type) {
+			case let .ALUI(_, dest, src1, src2):
+				// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
+				// Otherwise, la $d, 0x10008000 will return 0xFFFF8000 when it should return 0x10008000
+				let op: Operation32 = { return $0 | ($1 & 0xFFFF) }
+				ori.type = .ALUI(op: op, dest: dest, src1: src1, src2: src2)
+			default:
+				// Never reached
+				fatalError("Invalid ori instruction: \(ori)")
+			}
 			return [lui, ori]
 		case "move":
 			// Pseudo instruction, transforms to
@@ -909,7 +929,7 @@ class Instruction: CustomStringConvertible {
 			mult.labels = labels
 			mult.comment = comment
 			// mflo	dest
-			let mflo = Instruction.parseString("mflo " + args[1], location: location + 4, verbose: false)![0]
+			let mflo = Instruction.parseString("mflo " + args[1], location: location + mult.pcIncrement, verbose: false)![0]
 			return [mult, mflo]
 		case "div" where argCount != 3, "divu":
 			// Catches only the real div instruction, which puts $0/$1 in lo, $0%$1 in hi
@@ -938,7 +958,7 @@ class Instruction: CustomStringConvertible {
 			div.labels = labels
 			div.comment = comment
 			// mflo	dest/mfhi dest, depending on the pseudo instruction
-			let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + 4, verbose: false)![0]
+			let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + div.pcIncrement, verbose: false)![0]
 			return [div, move]
 		default:
 			return nil

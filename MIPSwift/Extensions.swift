@@ -194,7 +194,7 @@ extension UInt8 {
 // MARK: Convenience conversion between integer types
 
 extension Int16 {
-	// Quick way to convert to an unsigned 16-bit representation of self.
+	/// Quick way to convert to an unsigned 16-bit representation of self.
 	var unsigned: UInt16 { get { return UInt16(bitPattern: self) } }
 	
 	/// Quick accessor for the lower byte of self as an unsigned 8-bit integer.
@@ -202,6 +202,11 @@ extension Int16 {
 	
 	/// Quick accessor for the upper byte of self as an unsigned 8-bit integer.
 	var upperByte: UInt8 { get { return UInt8(truncatingBitPattern: self.unsigned >> 8) } }
+}
+
+extension UInt16 {
+	/// Quick way to convert to a signed 16-bit representation of self.
+	var signed: Int16 { get { return Int16(bitPattern: self) } }
 }
 
 extension Int32 {
