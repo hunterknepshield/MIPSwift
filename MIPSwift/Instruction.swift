@@ -800,7 +800,7 @@ class Instruction: CustomStringConvertible {
 			if src.1 == nil {
 				// Decomposes into an addi with zero; the immediate fits within 16 bits
 				// addi	dest, $0, src.lower
-				let addi = Instruction.parseString("addi \(args[1]), $zero, \(src.0.value)", location: location, verbose: false)![0]
+				let addi = Instruction.parseString("addi \(args[1]), \(zero.name), \(src.0.value)", location: location, verbose: false)![0]
 				return [addi]
 			} else {
 				// This must be decomposed into two instructions; the immediate is larger than 16 bits
@@ -835,12 +835,12 @@ class Instruction: CustomStringConvertible {
 			}
 			// This must be decomposed into two instructions, since addresses are always 32 bits
 			// lui	dest, src.upper
-			let lui = Instruction.parseString("lui " + args[1] + ", \(aaaa.value)", location: location, verbose: false)![0]
+			let lui = Instruction.parseString("lui \(args[1]), \(aaaa.value)", location: location, verbose: false)![0]
 			lui.unresolvedDependencies.append(args[2])
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(aaaa.value)", location: location + lui.pcIncrement, verbose: false)![0]
+			let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(aaaa.value)", location: location + lui.pcIncrement, verbose: false)![0]
 			ori.unresolvedDependencies.append(args[2])
 			switch(ori.type) {
 			case let .ALUI(_, dest, src1, src2):
@@ -862,7 +862,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
 				return nil
 			}
-			let add = Instruction.parseString("add " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			let add = Instruction.parseString("add \(args[1]), \(args[2]), \(zero.name)", location: location, verbose: false)![0]
 			add.labels = labels
 			add.comment = comment
 			return [add]
@@ -876,7 +876,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
 				return nil
 			}
-			let nor = Instruction.parseString("nor " + args[1] + ", " + args[2] + ", $zero", location: location, verbose: false)![0]
+			let nor = Instruction.parseString("nor \(args[1]), \(args[2]), \(zero.name)", location: location, verbose: false)![0]
 			nor.labels = labels
 			nor.comment = comment
 			return [nor]
@@ -890,7 +890,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true) else {
 				return nil
 			}
-			let add = Instruction.parseString("add " + args[1] + ", $zero, $zero", location: location, verbose: false)![0]
+			let add = Instruction.parseString("add \(args[1]), \(zero.name), \(zero.name)", location: location, verbose: false)![0]
 			add.labels = labels
 			add.comment = comment
 			return [add]
@@ -927,11 +927,11 @@ class Instruction: CustomStringConvertible {
 			}
 			// Decompose into 2 instructions
 			// mult	src1, src2
-			let mult = Instruction.parseString("mult " + args[2] + ", " + args[3], location: location, verbose: false)![0]
+			let mult = Instruction.parseString("mult \(args[2]), \(args[3])", location: location, verbose: false)![0]
 			mult.labels = labels
 			mult.comment = comment
 			// mflo	dest
-			let mflo = Instruction.parseString("mflo " + args[1], location: location + mult.pcIncrement, verbose: false)![0]
+			let mflo = Instruction.parseString("mflo \(args[1])", location: location + mult.pcIncrement, verbose: false)![0]
 			return [mult, mflo]
 		case "div" where argCount != 3, "divu":
 			// Catches only the real div instruction, which puts $0/$1 in lo, $0%$1 in hi
@@ -956,12 +956,41 @@ class Instruction: CustomStringConvertible {
 			}
 			// Decompose this into 2 instructions
 			// div	src1, src2
-			let div = Instruction.parseString("div " + args[2] + ", " + args[3], location: location, verbose: false)![0]
+			let div = Instruction.parseString("div \(args[2]), \(args[3])", location: location, verbose: false)![0]
 			div.labels = labels
 			div.comment = comment
 			// mflo	dest/mfhi dest, depending on the pseudo instruction
-			let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + div.pcIncrement, verbose: false)![0]
+			let move = Instruction.parseString("\(args[0] == "rem" ? "mfhi" : "mflo") \(args[1])", location: location + div.pcIncrement, verbose: false)![0]
 			return [div, move]
+		case "bge", "bgt", "ble", "blt":
+			// Branch pseudo instructions, all of which decompose to a combination of slt and beq/bne
+			// bge (branch on greater than or equal) becomes slt $at, src1, src2 and beq $at, $0, dest
+			// bgt (branch on greater than) becomes slt $at, src2, src1 and bne $at, $0, dest
+			// ble (branch on less than or equal) becomes slt $at, src2, src1 and beq $at, $0, dest
+			// blt (branch on less than) becomes slt $at, src1, src2 and bne $at, $0, dest
+			if argCount != 3 {
+				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
+				return nil
+			}
+			guard validLabelRegex.test(args[3]), let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
+				return nil
+			}
+			let slt: Instruction
+			switch(args[0]) {
+			case "bge", "blt":
+				slt = Instruction.parseString("slt \(at.name), \(args[1]), \(args[2])", location: location, verbose: false)![0]
+			default:
+				slt = Instruction.parseString("slt \(at.name), \(args[2]), \(args[1])", location: location, verbose: false)![0]
+			}
+			let branch: Instruction
+			switch(args[0]) {
+			case "bge", "ble":
+				branch = Instruction.parseString("beq \(at.name), \(zero.name), \(args[3])", location: location + slt.pcIncrement, verbose: false)![0]
+			default:
+				branch = Instruction.parseString("bne \(at.name), \(zero.name), \(args[3])", location: location + slt.pcIncrement, verbose: false)![0]
+			}
+			// Dependency for the branch instruction is already baked in
+			return [slt, branch]
 		default:
 			print("Invalid instruction: \(args[0])")
 			return nil
