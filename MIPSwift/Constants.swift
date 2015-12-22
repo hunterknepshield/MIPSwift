@@ -95,6 +95,10 @@ let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: 
 /// A regular expression that matches only valid labels. All valid labels must
 /// be alphanumeric, and must start with a letter.
 let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$")!
+/// A regular expression that matches only valid label definitions. Similar to
+/// validLabelRegex, but includes consideration for a label being anywhere in a
+/// string and also the ending colon delimiter.
+let validLabelDefinitionRegex = Regex("[a-zA-Z][0-9a-zA-Z_]*:")!
 /// A regular expression that matches only valid string literals, with
 /// consideration for escape sequences.
 let validStringLiteralRegex = Regex("\"([^\"\\\\]|\\\\.)*\"")!

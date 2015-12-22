@@ -328,8 +328,9 @@ class REPL {
             print("\(name): \(value.format(self.registers.printOption.rawValue))")
         case .LabelDump:
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
-            print("All labels currently stored: ", terminator: labelsToLocations.count == 0 ? "(none)\n" : "\n")
-            labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) }).forEach({ print("\t\($0.0): \($0.1.hexWith0x)") })
+            print("All labels currently stored: ", terminator: self.labelsToLocations.count == 0 ? "(none)\n" : "\n")
+			let alphabetized = self.labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) })
+			alphabetized.forEach({ print("\t\($0.stringByPaddingToLength(24, withString: " ", startingAtIndex: 0)) \($1.hexWith0x)") })
         case .SingleLabel(let label):
             // Print the location of the given label
             guard let location = labelsToLocations[label] else {
@@ -339,7 +340,7 @@ class REPL {
             print("\(label): \(location.hexWith0x)")
 		case .Unresolved:
 			// Print any unresolved labels.
-			print("Currently unresolved labels: ", terminator: "")
+			print("Currently unresolved labels: ", terminator: self.unresolvedInstructions.count == 0 ? "(none)\n" : "")
 			var counter = 0
 			self.unresolvedInstructions.sort({ return $0.0.0 < $0.1.0 }).forEach({ print($0.0, terminator: ++counter < self.unresolvedInstructions.count ? ", " : "\n") })
         case .InstructionDump:
@@ -445,7 +446,7 @@ class REPL {
             print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.hexWith0x)>'")
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
-            print("All interpreter commands. Required parameters are displayed in [brackets], optional parameters are displayed in (parentheses), and multiple valid values are separated|by|pipes.")
+            print("All interpreter commands. Required parameters are displayed in [brackets], optional parameters are displayed in (parentheses), and multiple valid values are separated|by|pipes. Locations are assumed to be given in hexadecimal, and register names must begin with the '\(registerDelimiter)' delimiter.")
             print("\tautoexecute|ae:                                 toggle auto-execution of entered instructions.")
             print("\texecute|exec|ex|e:                              execute all instructions previously paused by disabling auto-execution.")
             print("\ttrace|t:                                        toggle printing of every instruction as it is executed.")

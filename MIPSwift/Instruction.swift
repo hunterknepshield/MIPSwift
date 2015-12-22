@@ -398,7 +398,7 @@ class Instruction: CustomStringConvertible {
 		
 		// Comment removal: if anything in arguments contains a hashtag (wow, I did just call it a hashtag instead of a pound sign),
 		// then remove it and any subsequent elements from the array and continue parsing
-		let comment: String?
+		var comment: String?
 		let argumentContainsComment = args.map({ $0.containsString(commentDelimiter) })
 		if let commentBeginningIndex = argumentContainsComment.indexOf(true) {
 			let commentBeginningString = args[commentBeginningIndex]
@@ -426,22 +426,19 @@ class Instruction: CustomStringConvertible {
 		// Label identification: if anything at the beginning of arguments ends with a colon,
 		// then remove it from arguments to be parsed and add it to this instruction's labels array
 		var labels = [String]()
-		while args.count > 0 && String(args[0].characters.last!) == labelDelimiter {
-			// Loop for all labels before the actual instruction arguments
-			let fullString = args.removeFirst()
-			let splitLabels = fullString.componentsSeparatedByString(labelDelimiter).filter({ return !$0.isEmpty })
-			// splitLabels may be one label or many; a single argument may actually be something like label1:label2:label3:
-			for label in splitLabels {
-				if !validLabelRegex.test(label) {
-					// This label contains one or more invalid characters
-					print("Invalid label: \(label)")
-					return nil
-				}
-				labels.append(label)
-				if verbose {
-					print("Label: \(label)")
-				}
+		while args.count > 0 && validLabelDefinitionRegex.test(args[0]) {
+			let labelMatches = validLabelDefinitionRegex.match(args[0]).map({ return String($0.characters.dropLast()) }) // Cut off colon
+			// There may be the beginning of an instruction after the last label, i.e. label1:label2:addi $t0, $t1, 4
+			// Have to ensure that isn't lost; it won't be matched into the labelMatches array and it can't be ignored
+			let labelsEndIndex = args[0].rangeOfString(labelMatches.last!)!.endIndex.successor() // Can safely force both optionals
+			let afterLabels = args[0].substringFromIndex(labelsEndIndex) // Substring from after the last colon, may be empty
+			labelMatches.forEach({ labels.append($0); if verbose { print("Label: \($0)") } })
+			if !afterLabels.isEmpty {
+				// Put the non-label portion of this argument back in then stop parsing labels
+				args[0] = afterLabels
+				break
 			}
+			args.removeFirst()
 		}
 		
 		// Done removing things from arguments, but directives may modify further
@@ -508,7 +505,7 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 				// Make sure there is nothing between the directive and literal
-				let directiveEndRange = string.rangeOfString(dotDirective.rawValue)! // Can force this; impossible to be nil at this point
+				let directiveEndRange = string.rangeOfString(dotDirective.rawValue)! // Can safely force this optional
 				let beforeLiteral = string.substringWithRange(Range(start: directiveEndRange.endIndex, end: rangeOfLiteral.startIndex)).stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
 				if beforeLiteral.characters.count > 0 {
 					print("Invalid data before string literal: \(beforeLiteral)")
@@ -518,8 +515,10 @@ class Instruction: CustomStringConvertible {
 				let afterLiteral = string.substringFromIndex(rangeOfLiteral.endIndex).stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
 				let commentRemoved: String
 				if let commentRange = afterLiteral.rangeOfString(commentDelimiter) {
+					comment = afterLiteral.substringFromIndex(commentRange.endIndex)
 					commentRemoved = afterLiteral.substringToIndex(commentRange.startIndex)
 				} else {
+					comment = nil
 					commentRemoved = afterLiteral
 				}
 				if commentRemoved.characters.count > 0 {
@@ -963,6 +962,7 @@ class Instruction: CustomStringConvertible {
 			let move = Instruction.parseString((args[0] == "rem" ? "mfhi " : "mflo ") + args[1], location: location + div.pcIncrement, verbose: false)![0]
 			return [div, move]
 		default:
+			print("Invalid instruction: \(args[0])")
 			return nil
 		}
 	}
