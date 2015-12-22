@@ -26,11 +26,22 @@ class Regex {
         }
     }
 	
+	/// Get all valid matches of self in the supplied string.
+	func match(testString: String) -> [String] {
+		let test = self.expression.matchesInString(testString, options: [], range: NSMakeRange(0, testString.characters.count))
+		var result = [String]()
+		test.forEach({
+			let nsrange = $0.range
+			let range = Range(start: testString.startIndex.advancedBy(nsrange.location), end: testString.startIndex.advancedBy(nsrange.location + nsrange.length))
+			result.append(testString.substringWithRange(range))
+		})
+		return result
+	}
+	
 	/// Return whether self matches the supplied string or not.
-    func test(testString: String) -> Bool {
-        let matches = self.expression.matchesInString(testString, options: [], range: NSMakeRange(0, testString.characters.count))
-        return matches.count > 0
-    }
+	func test(testString: String) -> Bool {
+		return self.match(testString).count > 0
+	}
 	
 	/// Remove any portions of the supplied string that match self.
     func remove(string: String) -> String {

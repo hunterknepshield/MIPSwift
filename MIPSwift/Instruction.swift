@@ -139,13 +139,13 @@ class Instruction: CustomStringConvertible {
 			}
 			var string = self.arguments[0].stringByPaddingToLength(8, withString: " ", startingAtIndex: 0)
 			if case let .Directive(directive, _) = self.type where [.Ascii, .Asciiz].contains(directive) {
-				// Add string literal delimiters before and after arguments; only for .ascii/.asciiz
+				// Add string literal delimiters and revert to the escaped version of the argument; only for .ascii/.asciiz
 				string += stringLiteralDelimiter + self.arguments[1].expandedEscapes + stringLiteralDelimiter
 			} else if case .Memory(_) = self.type {
-				// Special formatting of memory instruction, e.g. lw  $s0, 0($sp)
+				// Special formatting of memory instruction, e.g. lw    $s0, 0($sp)
 				string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
 			} else {
-				// Default formatting for instruction, e.g. add	$t0, $t1, $t2
+				// Default formatting for instructions, e.g. add    $t0, $t1, $t2
 				var counter = 0
 				self.arguments.dropFirst().forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
 			}
@@ -453,7 +453,7 @@ class Instruction: CustomStringConvertible {
 		}
 		
 		let argCount = args.count - 1 // Don't count the actual instruction
-		if String(args[0].characters.first!) == directiveDelimiter {
+		if String(args[0].characters[0]) == directiveDelimiter {
 			// MARK: Directive parsing
 			// Requires a significant amount of additional parsing to make sure arguments are in order
 			// Parsing runs under the assumption that this instruction will immediately be executed,
@@ -495,36 +495,38 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 			case .Ascii, .Asciiz:
-				// Interesting problem:
-				// .asciiz		"This is the string."		# This " confuses things
-				// .asciiz		"This is the # string."		# Doesn't confuse things, but comment is thought to begin at first hashtag
-				// Allocate space for a string; 1 argument, though it may have been split by parsing above, so it needs to be reassembled
+				// Allocate space for a string of characters in memory
 				if argCount == 0 {
 					// Can't just check argCount != 1 because the string may have been split up above
 					print("Directive \(dotDirective.rawValue) expects 1 argument, got 0.")
 					return nil
 				}
-				// Need to ensure that the whitespace from the original instruction's argument isn't lost
-				guard let stringBeginningRange = string.rangeOfString(stringLiteralDelimiter) else {
-					print("Directive \(dotDirective.rawValue) expects string literal.")
+				// Use regex to pull out any valid string literals
+				let matches = validStringLiteralRegex.match(string)
+				guard matches.count > 0, let rangeOfLiteral = string.rangeOfString(matches[0]) else {
+					print("Directive \(dotDirective.rawValue) expects a string literal.")
 					return nil
 				}
-				guard let stringEndRange = string.rangeOfString(stringLiteralDelimiter, options: [.BackwardsSearch]) where stringBeginningRange.endIndex <= stringEndRange.startIndex else {
-					print("String literal expects closing delimiter.")
+				// Make sure there is nothing between the directive and literal
+				let directiveEndRange = string.rangeOfString(dotDirective.rawValue)! // Can force this; impossible to be nil at this point
+				let beforeLiteral = string.substringWithRange(Range(start: directiveEndRange.endIndex, end: rangeOfLiteral.startIndex)).stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+				if beforeLiteral.characters.count > 0 {
+					print("Invalid data before string literal: \(beforeLiteral)")
 					return nil
 				}
-				let rawArgument = string.substringWithRange(stringBeginningRange.endIndex..<stringEndRange.startIndex)
-				let directivePart = string[string.startIndex..<stringBeginningRange.endIndex]
-				if directivePart.characters.count + rawArgument.characters.count + 1 != string.characters.count {
-					// There is trailing stuff after the string literal is closed, check if it's a comment
-					let trailingStuff = string[stringEndRange.endIndex..<string.endIndex]
-					if trailingStuff.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet()).hasPrefix(commentDelimiter) {
-						// Trailing stuff is just a comment, allow this
-					} else {
-						print("Invalid data after string literal: \(trailingStuff)")
-						return nil
-					}
+				// Make sure there is nothing after the literal, except possibly a comment
+				let afterLiteral = string.substringFromIndex(rangeOfLiteral.endIndex).stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+				let commentRemoved: String
+				if let commentRange = afterLiteral.rangeOfString(commentDelimiter) {
+					commentRemoved = afterLiteral.substringToIndex(commentRange.startIndex)
+				} else {
+					commentRemoved = afterLiteral
 				}
+				if commentRemoved.characters.count > 0 {
+					print("Invalid data after string literal: \(commentRemoved)")
+					return nil
+				}
+				let rawArgument = matches[0].substringWithRange(Range(start: matches[0].startIndex.successor(), end: matches[0].endIndex.predecessor())) // Remove the quotes on the literal (included in the regex match)
 				guard let escapedArgument = rawArgument.compressedEscapes else {
 					print("Invalid string literal: \(rawArgument)")
 					return nil

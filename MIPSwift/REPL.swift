@@ -284,6 +284,11 @@ class REPL {
         switch(command) {
         case .AutoExecute:
             // Toggle current auto-execute setting
+			if self.unresolvedInstructions.count > 0 {
+				// The user is attempting to resume execution and turn auto-execute on, but there are unresolved instructions
+				print("Unable to toggle auto-execute, there are still unresolved label dependencies present. Use the '\(commandDelimiter)unresolved' command to view them.")
+				break
+			}
             self.autoexecute = !self.autoexecute
             if self.autoexecute {
                 // If autoexecute was previously disabled, execution may need to catch up
@@ -300,7 +305,12 @@ class REPL {
             }
         case .Execute:
             // Run commands from wherever the user last disabled auto-execute
-            if self.autoexecute {
+			if self.unresolvedInstructions.count > 0 {
+				// The user is attempting to resume execution, but there are unresolved instructions
+				print("Unable to resume execution, there are still unresolved label dependencies present. Use the '\(commandDelimiter)unresolved' command to view them.")
+				break
+			}
+			if self.autoexecute {
                 print("Auto-execute is enabled. No unexecuted instructions to execute.")
             } else {
                 resumeExecution()

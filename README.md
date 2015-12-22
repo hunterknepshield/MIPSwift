@@ -14,7 +14,6 @@ A MIPS interpreter written in Swift by Hunter Knepshield.
 
 ## What it can't do (yet...?), a.k.a. issues
 - Unable to handle creation of instructions from their raw numeric encoding, e.g. `0000 00ss ssst tttt dddd d000 0010 0000` being translated to `add $d, $s, $t`.
-- Some string literals can be problematic, e.g. `.asciiz "This will cause" # a problem"`.
 
 ## License
 Modification and redistribution of this software is permitted under the MIT License. See LICENSE.txt for more information.
