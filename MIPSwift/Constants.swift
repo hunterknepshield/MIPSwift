@@ -36,7 +36,9 @@ let soundManager = SoundManager()
 let uninstantiableRegisters = ["hi", "$hi", "lo", "$lo", "pc", "$pc"]
 /// Registers that the user can't write to.
 let immutableRegisters = uninstantiableRegisters + ["$zero", "$0"]
-/// All register names.
+/// All register names. If a raw number to a register is generated, its 'pretty'
+/// alias can be found at validRegisters[2\*i], e.g. validRegisters[0] = "$zero",
+/// validRegisters[2\*3] = "$v1", etc.
 let validRegisters = ["$zero", "$0", "$at", "$1", "$v0", "$2", "$v1", "$3", "$a0", "$4", "$a1", "$5", "$a2", "$6", "$a3", "$7", "$t0", "$8", "$t1", "$9", "$t2", "$10", "$t3", "$11", "$t4", "$12", "$t5", "$13", "$t6", "$14", "$t7", "$15", "$s0", "$16", "$s1", "$17", "$s2", "$18", "$s3", "$19", "$s4", "$20", "$s5", "$21", "$s6", "$22", "$s7", "$23", "$t8", "$24", "$t9", "$25", "$k0", "$26", "$k1", "$27", "$gp", "$28", "$sp", "$29", "$fp", "$30", "$ra", "$31", "pc", "$pc", "hi", "$hi", "lo", "$lo"]
 
 // MARK: Register constants
@@ -111,7 +113,11 @@ let valid16BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,4}$")!
 
 // MARK: Instruction parsing constants
 
-/// Maps R-type instruction names to function codes (all R-type opcodes are 000000).
+/// The generic label used when decoding instructions from their numeric
+/// encodings.
+let assemblerLabel = "ASSEMBLER"
+/// Maps R-type instruction names to function codes (all R-type opcodes are
+/// 000000).
 let rTypeFunctionCodes: [String : Int32] = ["add": 0x20, "addu": 0x21, "and": 0x24, "break": 0x0D, "div": 0x1A, "divu": 0x1B, "jalr": 0x09, "jr": 0x08, "mfhi": 0x10, "mflo": 0x12, "mthi": 0x11, "mtlo": 0x13, "mult": 0x18, "multu": 0x19, "nor": 0x27, "or": 0x25, "sll": 0x00, "sllv": 0x04, "slt": 0x2A, "sltu": 0x2B, "sra": 0x03, "srav": 0x07, "srl": 0x02, "srlv": 0x06, "sub": 0x22, "subu": 0x23, "syscall": 0x0C, "xor": 0x26]
 /// Maps I-type instruction names to opcodes.
 let iTypeOpcodes: [String : Int32] = ["addi": 0x08, "addiu": 0x09, "andi": 0x0C, "beq": 0x04, "bgez": 0x01, "bgtz": 0x07, "blez": 0x06, "bltz": 0x01, "bne": 0x05, "lb": 0x20, "lbu": 0x24, "lh": 0x21, "lhu": 0x25, "lui": 0x0F, "lw": 0x23, "lwc1": 0x31, "ori": 0x0D, "sb": 0x28, "slti": 0x09, "sltiu": 0x0B, "sh": 0x29, "sw": 0x2B, "swc1": 0x39, "xori": 0x0F]

@@ -11,7 +11,6 @@
 
 import Foundation
 
-// MARK: Typealiases
 /// 2 operands, 1 result. Most typical operation type.
 typealias Operation32 = (Int32, Int32) -> Int32
 /// 2 operands, 2 results. Generally used for instructions that store into hi
@@ -25,7 +24,6 @@ typealias Operation64 = (Int32, Int32) -> (hi: Int32, lo: Int32)
 /// 2 operands, 1 boolean result. Generally used for branch instructions.
 typealias OperationBool = (Int32, Int32) -> Bool
 
-// MARK: InstructionType
 /// Representations of each type of MIPS instruction. Each instruction type has
 /// all appropriate associated values to complete the instruction.
 enum InstructionType {
@@ -107,7 +105,6 @@ enum InstructionType {
     case NonExecutable
 }
 
-// MARK: Instruction
 /// Representation of a MIPS instruction.
 class Instruction: CustomStringConvertible {
 	/// The exact string that was passed in during initialization, unmodified.
@@ -321,6 +318,82 @@ class Instruction: CustomStringConvertible {
 		self.labels = labels
 		self.comment = comment
 		self.type = type
+	}
+	
+	/// Initialize an instruction from its numeric encoding. Does not account
+	/// for labels or dependencies, but will return an executable instruction.
+	/// May fail if the encoding is invalid.
+	class func parseEncoding(encoding: Int32, location: Int32) -> Instruction? {
+		let oShift: Int32 = 26 // Number of bits to shift the opcode in
+		let sShift: Int32 = 21 // Number of bits to shift the s register in
+		let tShift: Int32 = 16 // Number of bits to shift the t register in
+		let dShift: Int32 = 11 // Number of bits to shift the d register in
+		let hShift: Int32 = 6 // Number of bits to shift the shift amount in
+
+		// Not all of these may be used (or even valid), but they can all be generated
+		let s = (encoding >> sShift) & 0x1F
+		let t = (encoding >> tShift) & 0x1F
+		let d = (encoding >> dShift) & 0x1F
+		let regS = validRegisters[Int(s*2)]
+		let regT = validRegisters[Int(t*2)]
+		let regD = validRegisters[Int(d*2)]
+		let imm = Immediate(Int16(bitPattern: UInt16(encoding & 0xFFFF)))
+		let shift = (encoding >> hShift) & 0x1F
+
+		let opcode = (encoding >> oShift) & 0x3F
+		switch(opcode) {
+		case 0:
+			// An R-type instruction; get the function code to determine the instruction
+			let functionCode = encoding & 0x3F // Want the lowest 6 bits
+			guard let instructionName = rTypeFunctionCodes.keyForValue(functionCode) else {
+				print("Invalid function code: \(functionCode)")
+				return nil
+			}
+			switch(instructionName) {
+			case "syscall":
+				// The one really weird one; no arguments
+				return Instruction.parseString("\(instructionName)", location: location, verbose: false)![0]
+			case "mult", "multu", "div":
+				// Only have 2 arguments
+				return Instruction.parseString("\(instructionName) \(regS), \(regT)", location: location, verbose: false)![0]
+			case "mfhi", "mflo":
+				// Only have 1 argument
+				return Instruction.parseString("\(instructionName) \(regD)", location: location, verbose: false)![0]
+			case "sll", "srl", "sra":
+				// Shift instructions; they have 3 arguments, but one is the shift amount instead of regS
+				return Instruction.parseString("\(instructionName) \(regD), \(regT), \(shift)", location: location, verbose: false)![0]
+			default:
+				// Most R-types take the usual 3 arguments
+				return Instruction.parseString("\(instructionName) \(regD), \(regS), \(regT)", location: location, verbose: false)![0]
+			}
+		case 1, 2:
+			// A jump; needs to pass a label to parseString and then we already know how to resolve it
+			guard let instructionName = jTypeOpcodes.keyForValue(opcode) else {
+				print("Invalid opcode: \(opcode)")
+				return nil
+			}
+			let destination = (encoding & 0x03FFFFFF) << 2 // Lower 26 bits of the encoding is the offset to the destination shifted right twice
+			let jump = Instruction.parseString("\(instructionName) \(assemblerLabel)", location: location, verbose: false)![0]
+			jump.resolveDependency(assemblerLabel, location: destination)
+			return jump
+		default:
+			// An I-type instruction
+			guard let instructionName = iTypeOpcodes.keyForValue(opcode) else {
+				print("Invalid opcode: \(opcode)")
+				return nil
+			}
+			switch(instructionName) {
+			case "lui":
+				// Takes 2 arguments
+				return Instruction.parseString("\(instructionName) \(regT), \(imm.value)", location: location, verbose: false)![0]
+			case "lw", "lh", "lhu", "lb", "lbu", "sw", "sh", "sb":
+				// Special formatting for memory operations, but they take 3 arguments
+				return Instruction.parseString("\(instructionName) \(regT), \(imm.value)(\(regS))", location: location, verbose: false)![0]
+			default:
+				// Most I-types take 3 arguments
+				return Instruction.parseString("\(instructionName) \(regT) \(regS), \(imm.value)", location: location, verbose: false)![0]
+			}
+		}
 	}
 	
 	/// Resolve dependencies (some or all) that this instruction has. For

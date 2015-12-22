@@ -22,6 +22,17 @@ extension String.CharacterView {
 	}
 }
 
+extension Dictionary where Value: Equatable {
+	func keysForValue(value: Value) -> [Key] {
+		return self.filter({ return $0.1 == value }).map({ $0.0 })
+	}
+	
+	func keyForValue(value: Value) -> Key? {
+		let keys = self.keysForValue(value)
+		return keys.count > 0 ? keys[0] : nil
+	}
+}
+
 // MARK: String escape sequence manipulation
 
 extension String {
