@@ -31,14 +31,14 @@ struct Immediate {
 	/// value supplied fits in a 32-bit representation, but not a 16-bit
 	/// representation.
 	static func parseString(string: String, canReturnTwo: Bool) -> (lower: Immediate, upper: Immediate?)? {
-		if canReturnTwo, let twoImms = Int32(string) {
+		if let immValue = Int16(string) {
+			// Preferentially generate a 16-bit value if possible before attempting to generate two values
+			return (Immediate(immValue), nil)
+		} else if canReturnTwo, let twoImms = Int32(string) {
 			// This value is a normal decimal number and fits within a 32-bit integer and we're allowed to make 2, split it up
 			return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
-		} else if let immValue = Int16(string) {
-			// This value is a normal decimal number and fits within a 16-bit integer
-			return (Immediate(immValue), nil)
 		} else {
-			// Attempt to parse hexadecimal if possible, otherwise fail
+			// Attempt to parse hexadecimal if possible, otherwise just fail
 			if valid16BitHexRegex.test(string) {
 				// This should fit within a 16-bit integer
 				var value = UINT32_MAX

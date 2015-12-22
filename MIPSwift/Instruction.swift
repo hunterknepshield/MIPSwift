@@ -797,31 +797,33 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), src = Immediate.parseString(args[2], canReturnTwo: true) else {
 				return nil
 			}
-			// Determine what to load into the upper 16 bits of the register, will be 0 if the immediate isn't larger than 16 bits
-			let src2: Int16
-			if src.1 != nil {
-				src2 = src.1!.value
+			if src.1 == nil {
+				// Decomposes into an addi with zero; the immediate fits within 16 bits
+				// addi	dest, $0, src.lower
+				let addi = Instruction.parseString("addi \(args[1]), $zero, \(src.0.value)", location: location, verbose: false)![0]
+				return [addi]
 			} else {
-				src2 = 0
+				// This must be decomposed into two instructions; the immediate is larger than 16 bits
+				let src2 = src.1!.value
+				// lui	dest, src.upper
+				let lui = Instruction.parseString("lui \(args[1]), \(src2)", location: location, verbose: false)![0]
+				lui.labels = labels
+				lui.comment = comment
+				// ori	dest, dest, src.lower
+				let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(src.0.value)", location: location + lui.pcIncrement, verbose: false)![0]
+				switch(ori.type) {
+				case let .ALUI(_, dest, src1, src2):
+					// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
+					// Otherwise, li $d, 32768 (INT16_MAX + 1) will return 0xFFFF8000 (which is INT16_MIN, -32768) when it
+					// should return 0x00008000 (which is correct)
+					let op: Operation32 = { return $0 | ($1 & 0xFFFF) }
+					ori.type = .ALUI(op: op, dest: dest, src1: src1, src2: src2)
+				default:
+					// Never reached
+					fatalError("Invalid ori instruction: \(ori)")
+				}
+				return [lui, ori]
 			}
-			// This must be decomposed into two instructions, since the immediate may be 32 bits
-			// lui	dest, src.upper
-			let lui = Instruction.parseString("lui " + args[1] + ", \(src2)", location: location, verbose: false)![0]
-			lui.labels = labels
-			lui.comment = comment
-			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori " + args[1] + ", " + args[1] + ", \(src.0.value)", location: location + lui.pcIncrement, verbose: false)![0]
-			switch(ori.type) {
-			case let .ALUI(_, dest, src1, src2):
-				// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
-				// Otherwise, li $d, 32768 (INT16_MAX + 1) will return 0xFFFF8000 when it should return 0x00008000
-				let op: Operation32 = { return $0 | ($1 & 0xFFFF) }
-				ori.type = .ALUI(op: op, dest: dest, src1: src1, src2: src2)
-			default:
-				// Never reached
-				fatalError("Invalid ori instruction: \(ori)")
-			}
-			return [lui, ori]
 		case "la":
 			// Pseudo instruction to load a 32-bit address of a label into a register
 			if argCount != 2 {
@@ -843,7 +845,6 @@ class Instruction: CustomStringConvertible {
 			switch(ori.type) {
 			case let .ALUI(_, dest, src1, src2):
 				// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
-				// Otherwise, la $d, 0x10008000 will return 0xFFFF8000 when it should return 0x10008000
 				let op: Operation32 = { return $0 | ($1 & 0xFFFF) }
 				ori.type = .ALUI(op: op, dest: dest, src1: src1, src2: src2)
 			default:
