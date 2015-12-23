@@ -26,13 +26,15 @@ beginning:
 		li  $t3, 32767			# INT16_MAX (0x7fff -> 0x0000 7fff)
 		li	$t4, 32768			# INT16_MAX + 1 (0x0000 8000)
 		li	$t5, -32768			# INT16_MIN (0x8000 -> 0xFFFF 8000)
-		li	$s0, 0x8000
-		li	$s1, 66
-		li	$s2, 200
+		li	$s0, 1
+		li	$s1, 65
+		li	$s2, 66
+		li	$s3, 100
 		sw	$s0, 0($sp)
-		sw	$s1, 4($sp)
-		sw	$s2, -4($sp)
-		addi	$sp, $sp, -4
+		sw	$s1, -4($sp)
+		sw	$s2, -8($sp)
+		sw	$s3, -12($sp)
+		addi	$sp, $sp, -12
 		add	$t1, $t1, $t1
 		la	$a0, string
 		li	$v0, 4

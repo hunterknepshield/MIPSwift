@@ -677,11 +677,8 @@ class Instruction: CustomStringConvertible {
 					args.dropFirst().forEach({ if Int8($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				case .Half:
 					args.dropFirst().forEach({ if Int16($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
-				case .Word:
-					args.dropFirst().forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				default:
-					// Never reached
-					fatalError("Invalid dot directive: \(dotDirective.rawValue)")
+					args.dropFirst().forEach({ if Int32($0) == nil { print("Invalid argument: \($0)"); validArgs = false } })
 				}
 				if !validArgs {
 					return nil
@@ -892,10 +889,8 @@ class Instruction: CustomStringConvertible {
 				op = (<)
 			case "bgtz":
 				op = (>)
-			case "blez":
+			default: // blez
 				op = (<=)
-			default:
-				fatalError("Invalid branch instruction \(args[0])")
 			}
 			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: aaaa)
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)

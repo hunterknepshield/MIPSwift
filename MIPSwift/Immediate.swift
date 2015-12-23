@@ -36,16 +36,15 @@ struct Immediate {
 			return (Immediate(immValue), nil)
 		} else if let immValue = Int16(string.stringByReplacingOccurrencesOfString("0x", withString: ""), radix: 16) {
 			// Was able to generate a number from hex
-			print("Hex")
 			return (Immediate(immValue), nil)
 		} else if canReturnTwo, let twoImms = Int32(string) {
 			// This value is a normal decimal number and fits within a 32-bit integer and we're allowed to make 2, split it up
 			return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
 		} else if canReturnTwo, let twoImms = Int32(string.stringByReplacingOccurrencesOfString("0x", withString: ""), radix: 16) {
 			// Was able to generate a number from hex
-			print("32-bit hex")
 			return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
 		}
+		// TODO implement basic math operations in immediate parsing, e.g. li	$t0, 4 << 8
 		// Unable to generate a decimal or hex value, 16 or 32 bits, time to just fail
 		return nil
 	}

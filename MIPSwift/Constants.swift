@@ -19,8 +19,13 @@ let commandLineOptions = "[-d] [-noae] [-f file]"
 let beginningText: Int32 = 0x00400000
 /// The beginning location of the data segment.
 let beginningData: Int32 = 0x10000000
+/// The last byte of memory that is accessible to the user's program.
+let memoryLimit = INT32_MAX
 /// The initial location of the stack pointer.
-let beginningSp: Int32 = 0x7FFFFFFF
+let beginningSp: Int32 = 0x7FFFFFFC
+/// The initial return address. When the program jumps to this address, it's
+/// assumed to mean same thing as using the exit syscall (exit code 0).
+let beginningRa = Int32(bitPattern: 0x80000000)
 /// The file handle associated with keyboard/standard input.
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
 /// An immediate with value 0xAAAA, to represent an uninitialized value within
@@ -52,6 +57,12 @@ let at = Register("$at", writing: true, user: false)!
 let ra = Register("$ra", writing: true, user: false)!
 /// The register $sp, which is used as the address of the top of the stack.
 let sp = Register("$sp", writing: true, user: false)!
+/// The register $fp, which is used as the address of the base of the current
+/// stack frame.
+let fp = Register("$fp", writing: true, user: false)!
+/// The register $gp, which is used as a pointer into the data segment.
+/// Generally unused.
+let gp = Register("$gp", writing: true, user: false)!
 /// The register $pc, which is used as the address of the current instruction to
 /// execute.
 let pc = Register("$pc", writing: true, user: false)!
@@ -82,6 +93,8 @@ let commandDelimiter = ":"
 let directiveDelimiter = "."
 /// Marks the beginning or end of a string argument, e.g. .asciiz "This is a string."
 let stringLiteralDelimiter = "\""
+/// Marks the beginning or end of a character argument, e.g. CHAR_A = 'A'
+let characterLiteralDelimiter = "'"
 /// Marks the beginning of a register reference, e.g. add $t0, $t1, $t2.
 let registerDelimiter = "$"
 /// Marks the end of a label, e.g. some_label: add	$t0, $t1, $t2

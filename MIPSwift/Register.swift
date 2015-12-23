@@ -79,9 +79,7 @@ struct Register {
 				return 30
 			case "$ra", "$31":
 				return 31
-			case "hi", "$hi", "lo", "$lo":
-				return 0
-			default:
+			default: // hi, lo, pc, and anything else without a directly representable number
 				return -1
 			}
 		}

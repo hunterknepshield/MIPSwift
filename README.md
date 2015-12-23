@@ -20,6 +20,7 @@ This project is a top-level MIPS interpreter. It runs MIPS 32-bit instructions, 
 - Overflow handling may still be messy; haven't done enough testing with that yet. No detection or exception handling methods yet.
 - No support yet for the = directive, i.e. `PRINT_INT_SYSCALL = 1`; `li $v0, PRINT_INT_SYSCALL`.
 - Errors like stack overflow are not checked.
+- Simple C-style operations within immediate values are not supported (i.e. li $t0, 4 << 8; sw	$4, FRAME_SIZE-4($sp))
 
 ## License
 Modification and redistribution of this software is permitted under the MIT License. See LICENSE.txt for more information.

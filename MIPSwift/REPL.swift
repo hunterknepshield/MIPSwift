@@ -76,8 +76,11 @@ class REPL {
         self.usingFile = options.usingFile
         
         // Set initial register values
-        self.registers.set(pc.name, currentTextLocation)
+        self.registers.set(pc.name, beginningText)
         self.registers.set(sp.name, beginningSp)
+		self.registers.set(fp.name, beginningSp)
+		self.registers.set(gp.name, beginningData)
+		self.registers.set(ra.name, beginningRa)
     }
 	
 	/// Begin reading input. This function will continue running until either an
@@ -379,13 +382,19 @@ class REPL {
             case .Right(let label):
 				guard let loc = labelsToLocations[label] else {
 					print("Invalid label: \(label)")
-					return
+					return // Can't just break because of nested switch
 				}
 				location = loc
             }
             // Print count*4 bytes of memory starting at location
             var words = [Int32]()
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
+			let distanceToLimit = memoryLimit - location + 1
+			if Int(distanceToLimit/4) < count {
+				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
+				print("Cannot access memory space at or above 0x80000000. Use a count of \(distanceToLimit/4) or try a lower address.")
+				break
+			}
             for i in 0..<count {
                 let address = location + 4*i // Loading in 4-byte chunks
 				let highest = self.memory[address] ?? 0
@@ -423,6 +432,7 @@ class REPL {
             self.autodump = !self.autodump
             print("Auto-dump \(self.autodump ? "enabled" : "disabled").")
         case .Exit(let code):
+			executeCommand(.RegisterDump) // Dump everything before exiting
             print("Exiting MIPSwift.")
             if self.usingFile {
                 self.inputSource.closeFile()
@@ -541,6 +551,11 @@ class REPL {
 			self.registers.set(dest.name, result)
         case let .Memory(storing, unsigned, size, memReg, offset, addrReg):
             let addrRegValue = self.registers.get(addrReg.name)
+			if memoryLimit - addrRegValue < offset.signExtended {
+				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
+				print("Cannot access memory space at or above 0x80000000.")
+				break // Terminate here in the future?
+			}
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
             if address % Int32(1 << size) != 0 {
                 print("Unaligned memory address: \(address.hexWith0x)")
@@ -557,15 +572,12 @@ class REPL {
                     // Storing a half-word (from low-order bits)
                     self.memory[address] = valueToStore.lowerByte
                     self.memory[address + 1] = valueToStore.lowestByte
-                case 2:
+                default:
                     // Storing a word
                     self.memory[address] = valueToStore.highestByte
                     self.memory[address + 1] = valueToStore.higherByte
                     self.memory[address + 2] = valueToStore.lowerByte
                     self.memory[address + 3] = valueToStore.lowestByte
-                default:
-                    // Never reached
-                    fatalError("Invalid size for store: \(size)")
                 }
             } else {
                 // Loading a value from memory into memReg
@@ -579,16 +591,13 @@ class REPL {
                     // Loading a half-word
 					loadedValue = Int32(highest: 0, higher: 0, lower: self.memory[address] ?? 0, lowest: self.memory[address + 1] ?? 0, extendValue: unsigned ? 0 : 2)
 					print(loadedValue.hexWith0x)
-                case 2:
+                default:
                     // Loading a word
                     let highest = self.memory[address] ?? 0
                     let higher = self.memory[address + 1] ?? 0
                     let lower = self.memory[address + 2] ?? 0
                     let lowest = self.memory[address + 3] ?? 0
 					loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest, extendValue: 0)
-                default:
-                    // Never reached
-                    fatalError("Invalid size for load: \(size)")
                 }
                 self.registers.set(memReg.name, loadedValue)
             }
@@ -597,6 +606,11 @@ class REPL {
             switch(dest) {
             case .Left(let reg):
                 destinationAddress = self.registers.get(reg.name)
+				if destinationAddress == beginningRa {
+					// The user has jumped back to the initial return address, assume this means termination
+					print("Program terminated with exit code 0.")
+					executeCommand(.Exit(code: 0))
+				}
             case .Right(let addr):
                 destinationAddress = addr << 2
             }

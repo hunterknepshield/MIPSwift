@@ -249,9 +249,6 @@ extension Int32 {
 	init(highest: UInt8, higher: UInt8, lower: UInt8, lowest: UInt8, extendValue: Int) {
 		assert(0...4 ~= extendValue, "Invalid extendValue: \(extendValue)") // extendValue must be between 0 and 4, inclusive
 		switch(extendValue) {
-		case 0, 4:
-			// Don't sign-extend any bytes (equivalent of sign-extending the highest byte, but there's nowhere to extend
-			self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
 		case 1:
 			// Sign-extend the lowest byte; assumes higher bytes are all 0
 			self = Int32(Int8(bitPattern: lowest))
@@ -261,8 +258,9 @@ extension Int32 {
 		case 3:
 			// Sign-extend the higher byte; assumes higest byte is 0
 			self = (Int32(Int8(bitPattern: higher)) << 16) | (Int32(lower) << 8) | Int32(lowest)
-		default:
-			fatalError("Invalid")
+		default: // 0 or 4
+			// Don't sign-extend any bytes (equivalent of sign-extending the highest byte, but there's nowhere to extend
+			self = (Int32(highest) << 24) | (Int32(higher) << 16) | (Int32(lower) << 8) | Int32(lowest)
 		}
     }
 }
