@@ -163,7 +163,7 @@ extension Int32 {
             }
             return binaryString
         } else {
-            return NSString(format: f, self) as String
+            return String(format: f, self)
         }
     }
     
@@ -179,7 +179,7 @@ extension Int32 {
 extension Int16 {
 	/// Format self as specified by a given format string.
     func format(f: String) -> String {
-        return NSString(format: f, self) as String
+        return String(format: f, self)
     }
 }
 

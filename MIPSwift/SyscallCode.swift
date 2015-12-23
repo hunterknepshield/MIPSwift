@@ -26,9 +26,9 @@ enum SyscallCode: Int32 {
 	/// $v0 = value read.
     case ReadInt
 	/// $f0 = value read.
-    case ReadFloat // $f0
+    case ReadFloat
 	/// $f0 = value read.
-    case ReadDouble // $f0
+    case ReadDouble
 	/// $a0 = address of string to read into, $a1 = maximum number of characters
 	/// to read. Reads up to n - 1 characters and pads with '\0' (this is the
 	/// standard UNIX behavior).
@@ -54,12 +54,12 @@ enum SyscallCode: Int32 {
 	/// $a0 = exit code.
     case Exit2
 	
-	/// $a0 = low order bits, $a1 = high order bits
+	/// $a0 = low order bits, $a1 = high order bits.
     case Time = 30
 	/// $a0 = pitch, $a1 = duration (milliseconds), $a2 = instrument, $a3 =
 	/// volume.
     case MidiOut
-	/// $a0 = duration (milliseconds)
+	/// $a0 = duration (milliseconds).
     case Sleep
 	/// $a0 = pitch, $a1 = duration (milliseconds), $a2 = instrument, $a3 =
 	/// volume.
@@ -82,13 +82,13 @@ enum SyscallCode: Int32 {
 	/// $a0 = id, $f0 = next value.
     case RandomDouble
 	
-	/// $a0 = string address, $a0 = response
+	/// $a0 = string address, $a0 = response.
     case ConfirmDialog = 50
-	/// $a0 = string address, $a0 = value read, $a1 = status
+	/// $a0 = string address, $a0 = value read, $a1 = status.
     case InputDialogInt
-	/// $a0 = string address, $f0 = value read, $a1 = status
+	/// $a0 = string address, $f0 = value read, $a1 = status.
     case InputDialogFloat
-	/// $a0 = string address, $f0 = value read, $a1 = status
+	/// $a0 = string address, $f0 = value read, $a1 = status.
     case InputDialogDouble
 	/// $a0 = string address, $a1 = input buffer address, $a2 = maximum number
 	/// of characters, $a1 = status.

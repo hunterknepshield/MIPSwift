@@ -17,6 +17,9 @@ This project is a top-level MIPS interpreter. It runs MIPS 32-bit instructions, 
 
 ## What it can't do (yet...?), a.k.a. issues
 - Floating point operations, directives, and instructions are not implemented.
+- Overflow handling may still be messy; haven't done enough testing with that yet. No detection or exception handling methods yet.
+- No support yet for the = directive, i.e. `PRINT_INT_SYSCALL = 1`; `li $v0, PRINT_INT_SYSCALL`.
+- Errors like stack overflow are not checked.
 
 ## License
 Modification and redistribution of this software is permitted under the MIT License. See LICENSE.txt for more information.

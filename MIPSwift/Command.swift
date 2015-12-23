@@ -128,19 +128,13 @@ enum Command {
 			if validLabelRegex.test(args[0]) {
 				// This was a label
 				location = .Right(args[0])
+			} else if let address = Int32(args[0].stringByReplacingOccurrencesOfString("0x", withString: ""), radix: 16) {
+				// Could read a hex value
+				location = .Left(address)
 			} else {
-				// Attempt to read a hex value
-				var value = UINT32_MAX
-				let scanner = NSScanner(string: args[0])
-				if scanner.scanHexInt(&value) {
-					// Safe to make an Int32 from this value
-					location = .Left(value.signed)
-				} else {
-					// Unsafe to make an Int32 from this value, just complain
-					print("Invalid location: \(args[0])")
-					return nil
-				}
-            }
+				print("Invalid location: \(args[0])")
+				return nil
+			}
 			let count: Int
 			if argCount > 1 {
 				// User also specified a number of words to read
@@ -169,23 +163,9 @@ enum Command {
 			} else if validLabelRegex.test(args[0]) {
 				// Slight preference to labels over raw hex addresses
 				location = .Right(args[0])
-			} else if valid32BitHexRegex.test(args[0]) {
-				// Attempt to read a hex value
-				var value = UINT32_MAX
-				let scanner = NSScanner(string: args[0])
-				if scanner.scanHexInt(&value) {
-					// Safe to make an Int32 from this value
-					let address = value.signed
-					if address % 4 != 0 {
-						print("Unaligned memory address: \(address.hexWith0x)")
-						return nil
-					}
-					location = .Left(address)
-				} else {
-					// Unsafe to make an Int32 from this value, just complain
-					print("Invalid location: \(args[0])")
-					return nil
-				}
+			} else if let address = Int32(args[0].stringByReplacingOccurrencesOfString("0x", withString: ""), radix: 16) {
+				// Could read a hex value
+				location = .Left(address)
 			} else {
 				print("Invalid location: \(args[0])")
 				return nil

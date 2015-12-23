@@ -329,6 +329,11 @@ class Instruction: CustomStringConvertible {
 	/// for labels or dependencies, but will return an executable instruction.
 	/// May fail if the encoding is invalid.
 	class func parseEncoding(encoding: Int32, location: Int32) -> Instruction? {
+		if encoding == INT32_MAX {
+			// INT32_MAX is returned whenever encoding an instruction fails
+			return nil
+		}
+		
 		let oShift: Int32 = 26 // Number of bits to shift the opcode in
 		let sShift: Int32 = 21 // Number of bits to shift the s register in
 		let tShift: Int32 = 16 // Number of bits to shift the t register in

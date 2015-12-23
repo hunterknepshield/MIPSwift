@@ -20,13 +20,13 @@ let beginningText: Int32 = 0x00400000
 /// The beginning location of the data segment.
 let beginningData: Int32 = 0x10000000
 /// The initial location of the stack pointer.
-let beginningSp: Int32 = 0x7FFFEB38
+let beginningSp: Int32 = 0x7FFFFFFF
 /// The file handle associated with keyboard/standard input.
 let stdIn = NSFileHandle.fileHandleWithStandardInput()
 /// An immediate with value 0xAAAA, to represent an uninitialized value within
 /// an instruction; makes memory dump reading simpler to find unresolved
 /// instructions. Binary encoding: 1010 1010 1010 1010.
-let aaaa = Immediate.parseString("0xAAAA", canReturnTwo: false)!.0
+let aaaa = Immediate(Int16(bitPattern: UInt16(0xAAAA)))
 /// The tone generator used for all MIDI syscalls.
 let soundManager = SoundManager()
 
@@ -113,9 +113,9 @@ let valid16BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,4}$")!
 
 // MARK: Instruction parsing constants
 
-/// The generic label used when decoding instructions from their numeric
-/// encodings.
-let assemblerLabel = "ASSEMBLER"
+/// The generic label used when decoding instructions that require label
+/// resolution from their numeric encodings.
+let assemblerLabel = "ASSEMBLER_TEMP"
 /// Maps R-type instruction names to function codes (all R-type opcodes are
 /// 000000).
 let rTypeFunctionCodes: [String : Int32] = ["add": 0x20, "addu": 0x21, "and": 0x24, "break": 0x0D, "div": 0x1A, "divu": 0x1B, "jalr": 0x09, "jr": 0x08, "mfhi": 0x10, "mflo": 0x12, "mthi": 0x11, "mtlo": 0x13, "mult": 0x18, "multu": 0x19, "nor": 0x27, "or": 0x25, "sll": 0x00, "sllv": 0x04, "slt": 0x2A, "sltu": 0x2B, "sra": 0x03, "srav": 0x07, "srl": 0x02, "srlv": 0x06, "sub": 0x22, "subu": 0x23, "syscall": 0x0C, "xor": 0x26]
