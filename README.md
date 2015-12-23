@@ -16,7 +16,6 @@ This project is a top-level MIPS interpreter. It runs MIPS 32-bit instructions, 
 - Execute safely - if something would cause an error if it went through to execution, you'll be warned and nothing bad will happen (in most cases; this is not guaranteed).
 
 ## What it can't do (yet...?), a.k.a. issues
-- Unable to handle creation of instructions from their raw numeric encoding, e.g. `0000 00ss ssst tttt dddd d000 0010 0000` being translated to `add $d, $s, $t`.
 - Floating point operations, directives, and instructions are not implemented.
 
 ## License

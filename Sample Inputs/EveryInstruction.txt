@@ -1,0 +1,81 @@
+label:
+
+# Data to test with
+li	$t1, 1
+li	$t2, 2
+li	$t3, 3
+li	$t4, 4
+
+# R-type instructions...
+add	$t0, $t1, $t2
+addu	$t0, $t1, $t2
+sub	$t0, $t1, $t2
+subu	$t0, $t1, $t2
+and	$t0, $t1, $t2
+or	$t0, $t1, $t2
+xor	$t0, $t1, $t2
+nor	$t0, $t1, $t2
+slt	$t0, $t1, $t2
+sltu	$t0, $t1, $t2
+sll	$t0, $t1, 4
+sra	$t0, $t2, 1
+srl	$t0, $t2, 1
+sllv	$t0, $t1, $t2
+srav	$t0, $t1, $t2
+srlv	$t0, $t1, $t2
+
+# I-type instructions
+addi	$t0, $t1, 5
+addiu	$t0, $t1, 5
+andi	$t0, $t1, 5
+ori	$t0, $t1, 5
+xori	$t0, $t1, 5
+slti	$t0, $t1, 5
+sltiu	$t0, $t1, 5
+lui	$t0, 5
+
+# Memory instructions
+sw	$t1, 0($sp)
+sh	$t1, 0($sp)
+sb	$t1, 0($sp)
+lw	$t0, 0($sp)
+lh	$t0, 0($sp)
+lb	$t0, 0($sp)
+lhu	$t0, 0($sp)
+lbu	$t0, 0($sp)
+
+#la	$t0, after_jumps
+# Jump instructions
+#j	after_jumps
+#jal after_jumps
+#jr	$t0
+#jalr	$t0
+
+after_jumps:
+
+# Branch instructions
+#beq	$t0, $t1, after_branches
+#bne	$t0, $t1, after_branches
+#bgez $t0, after_branches
+#bgezal $t0, after_branches
+#bltz $t0, after_branches
+#bltzal $t0, after_branches
+#bgtz $t0, after_branches
+#blez	$t0, after_branches
+
+after_branches:
+
+# Other instructions, mostly pseudo instructions
+li	$t0, 0
+la	$t0, label
+move	$t0, $t1
+not	$t0, $t1
+clear	$t0
+mult	$t1, $t2
+multu	$t1, $t2
+div	$t1, $t2
+divu	$t1, $t2
+mfhi	$t0
+mflo	$t0
+
+syscall

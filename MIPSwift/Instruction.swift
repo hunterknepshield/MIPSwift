@@ -255,6 +255,11 @@ class Instruction: CustomStringConvertible {
 					// This is a true J-type
 					// Format for J-type instructions:
 					// oooo ooii iiii iiii iiii iiii iiii iiii
+					guard let opcode = jTypeOpcodes[self.arguments[0]] else {
+						print("Unrepresentable instruction: \(self.completeString ?? self.rawString)")
+						return INT32_MAX
+					}
+					encoding |= opcode << oShift
 					encoding |= address & 0x03FFFFFF // Only want 26 bits
 				}
 			case let .Branch(_, _, src1, src2, dest):
@@ -353,12 +358,15 @@ class Instruction: CustomStringConvertible {
 			case "syscall":
 				// The one really weird one; no arguments
 				return Instruction.parseString("\(instructionName)", location: location, verbose: false)![0]
-			case "mult", "multu", "div":
+			case "mult", "multu", "div", "divu":
 				// Only have 2 arguments
 				return Instruction.parseString("\(instructionName) \(regS), \(regT)", location: location, verbose: false)![0]
 			case "mfhi", "mflo":
 				// Only have 1 argument
 				return Instruction.parseString("\(instructionName) \(regD)", location: location, verbose: false)![0]
+			case "jr", "jalr":
+				// Only have 1 argument
+				return Instruction.parseString("\(instructionName) \(regS)", location: location, verbose: false)![0]
 			case "sll", "srl", "sra":
 				// Shift instructions; they have 3 arguments, but one is the shift amount instead of regS
 				return Instruction.parseString("\(instructionName) \(regD), \(regT), \(shift)", location: location, verbose: false)![0]
@@ -366,7 +374,25 @@ class Instruction: CustomStringConvertible {
 				// Most R-types take the usual 3 arguments
 				return Instruction.parseString("\(instructionName) \(regD), \(regS), \(regT)", location: location, verbose: false)![0]
 			}
-		case 1, 2:
+		case 1:
+			// bgez, bgezal, bltz, and bltzal all have an opcode of 1, but have different values for t
+			// bgez = 00001 = 1, bgezal = 10001 = 17, bltz = 00000 = 0, bltzal = 10000 = 16
+			let instructionName: String
+			switch(t) {
+			case 0:
+				instructionName = "bltz"
+			case 1:
+				instructionName = "bgez"
+			case 16:
+				instructionName = "bltzal"
+			default:
+				instructionName = "bgezal"
+			}
+			// Have to use a label then resolve
+			let branch = Instruction.parseString("\(instructionName) \(regS), \(assemblerLabel)", location: location, verbose: false)![0]
+			branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+			return branch
+		case 2, 3:
 			// A jump; needs to pass a label to parseString and then we already know how to resolve it
 			guard let instructionName = jTypeOpcodes.keyForValue(opcode) else {
 				print("Invalid opcode: \(opcode)")
@@ -389,6 +415,16 @@ class Instruction: CustomStringConvertible {
 			case "lw", "lh", "lhu", "lb", "lbu", "sw", "sh", "sb":
 				// Special formatting for memory operations, but they take 3 arguments
 				return Instruction.parseString("\(instructionName) \(regT), \(imm.value)(\(regS))", location: location, verbose: false)![0]
+			case "beq", "bne":
+				// Have to use a label then resolve
+				let branch = Instruction.parseString("\(instructionName) \(regS), \(regT), \(assemblerLabel)", location: location, verbose: false)![0]
+				branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+				return branch
+			case "bgtz", "blez":
+				// Have to use a label then resolve
+				let branch = Instruction.parseString("\(instructionName) \(regS), \(assemblerLabel)", location: location, verbose: false)![0]
+				branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+				return branch
 			default:
 				// Most I-types take 3 arguments
 				return Instruction.parseString("\(instructionName) \(regT) \(regS), \(imm.value)", location: location, verbose: false)![0]
