@@ -102,27 +102,31 @@ let labelDelimiter = ":"
 /// Marks the beginning of a comment, e.g. add	$t0, $t1, $t2 # This is a
 /// comment.
 let commentDelimiter = "#"
-/// All punctuation in instruction strings that separates arguments.
+/// All punctuation and whitespace in instruction strings that separates
+/// arguments.
 let validInstructionSeparators = "(), \t"
-/// The character set which represents all punctuation in instruction strings
-/// that separates arguments.
+/// The character set which represents all punctuation and whitespace in
+/// instruction strings that separates arguments.
 let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: validInstructionSeparators)
 /// A regular expression that matches only valid labels. All valid labels must
 /// be alphanumeric, and must start with a letter.
-let validLabelRegex = Regex("^[a-zA-Z][0-9a-zA-Z_]*$")!
+let validLabelRegex = Regex("^[a-zA-Z][\\da-zA-Z_]*$")!
 /// A regular expression that matches only valid label definitions. Similar to
 /// validLabelRegex, but includes consideration for a label being anywhere in a
 /// string and also the ending colon delimiter.
-let validLabelDefinitionRegex = Regex("[a-zA-Z][0-9a-zA-Z_]*:")!
+let validLabelDefinitionRegex = Regex("[a-zA-Z][\\da-zA-Z_]*:")!
 /// A regular expression that matches only valid string literals, with
 /// consideration for escape sequences.
 let validStringLiteralRegex = Regex("\"([^\"\\\\]|\\\\.)*\"")!
+/// A regular expression that matches a valid number, either in decimal or
+/// hexadecimal.
+let validNumericRegex = Regex("^((0[xX][\\da-fA-F]+)|(-?\\d+))$")!
 /// A regular expression that matches only valid hexadecimal numbers that may be
 /// converted to a 32-bit number (1 to 8 hex characters).
-let valid32BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,8}$")!
+let valid32BitHexRegex = Regex("^0[xX][\\da-fA-F]{1,8}$")!
 /// A regular expression that matches only valid hexadecimal numbers that may be
 /// converted to a 16-bit number (1 to 4 hex characters).
-let valid16BitHexRegex = Regex("^(?:0x)?[0-9a-fA-F]{1,4}$")!
+let valid16BitHexRegex = Regex("^0[xX][\\da-fA-F]{1,4}$")!
 
 // MARK: Instruction parsing constants
 

@@ -749,17 +749,17 @@ class Instruction: CustomStringConvertible {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), shift = Int32(args[3]) else {
+			guard let dest = Register(args[1], writing: true), src1 = Register(args[2], writing: false), shiftAmount = Int32(args[3]) else {
 				return nil
 			}
-			if !(0..<32 ~= shift) {
+			if !(0..<32 ~= shiftAmount) {
 				// REPL would otherwise terminate if it were to attempt executing a bitshift of 32 bits or more
-				print("Invalid shift amount: \(shift)")
+				print("Invalid shift amount: \(shiftAmount)")
 				return nil
 			}
-			type = .ALUR(op: .Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned >> $1.unsigned).signed })), dest: dest, src1: src1, src2: .Right(shift))
-			let shifti = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			return [shifti]
+			type = .ALUR(op: .Left(args[0] == "sll" ? (<<) : (args[0] == "sra" ? (>>) : { return ($0.unsigned >> $1.unsigned).signed })), dest: dest, src1: src1, src2: .Right(shiftAmount))
+			let shift = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
+			return [shift]
 		case "sllv", "srav", "srlv":
 			// SRL is essentially unsigned right shift
 			if argCount != 3 {
@@ -910,6 +910,8 @@ class Instruction: CustomStringConvertible {
 				// Decomposes into an addi with zero; the immediate fits within 16 bits
 				// addi	dest, $0, src.lower
 				let addi = Instruction.parseString("addi \(args[1]), \(zero.name), \(src.0.value)", location: location, verbose: false)![0]
+				addi.labels = labels
+				addi.comment = comment
 				return [addi]
 			} else {
 				// This must be decomposed into two instructions; the immediate is larger than 16 bits
@@ -919,7 +921,7 @@ class Instruction: CustomStringConvertible {
 				lui.labels = labels
 				lui.comment = comment
 				// ori	dest, dest, src.lower
-				let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(src.0.value)", location: location + lui.pcIncrement, verbose: false)![0]
+				let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(src.0.value)", location: lui.location + lui.pcIncrement, verbose: false)![0]
 				switch(ori.type) {
 				case let .ALUI(_, dest, src1, src2):
 					// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
@@ -949,7 +951,7 @@ class Instruction: CustomStringConvertible {
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(aaaa.value)", location: location + lui.pcIncrement, verbose: false)![0]
+			let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(aaaa.value)", location: lui.location + lui.pcIncrement, verbose: false)![0]
 			ori.unresolvedDependencies.append(args[2])
 			switch(ori.type) {
 			case let .ALUI(_, dest, src1, src2):
@@ -1012,8 +1014,8 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			type = .ALUR(op: .Left(+), dest: dest, src1: args[0] == "mfhi" ? hi : lo, src2: .Left(zero))
-			let mfhi = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			return [mfhi]
+			let move = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
+			return [move]
 		case "mult", "multu":
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
@@ -1025,25 +1027,8 @@ class Instruction: CustomStringConvertible {
 			type = .ALUR(op: .Right({ let fullValue = (args[0] == "mult" ? $0.signed64&*$1.signed64 : ($0.unsigned64&*$1.unsigned64).signed); return (fullValue.signedUpper32, fullValue.signedLower32) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
 			let mult = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [mult]
-		case "mul":
-			// Multiplication pseudo instruction, which stores the lower 32 bits of src1*src2 in the destination
-			if argCount != 3 {
-				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
-				return nil
-			}
-			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
-				return nil
-			}
-			// Decompose into 2 instructions
-			// mult	src1, src2
-			let mult = Instruction.parseString("mult \(args[2]), \(args[3])", location: location, verbose: false)![0]
-			mult.labels = labels
-			mult.comment = comment
-			// mflo	dest
-			let mflo = Instruction.parseString("mflo \(args[1])", location: location + mult.pcIncrement, verbose: false)![0]
-			return [mult, mflo]
 		case "div" where argCount != 3, "divu":
-			// Catches only the real div instruction, which puts $0/$1 in lo, $0%$1 in hi
+			// Catches only the real div instruction, which puts $0 / $1 in lo, $0 % $1 in hi
 			if argCount != 2 {
 				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
 				return nil
@@ -1054,23 +1039,41 @@ class Instruction: CustomStringConvertible {
 			type = .ALUR(op: .Right({ return args[0] == "div" ? (Int32.remainderWithOverflow($0, $1).0, Int32.divideWithOverflow($0, $1).0) : (UInt32.remainderWithOverflow($0.unsigned, $1.unsigned).0.signed, UInt32.divideWithOverflow($0.unsigned, $1.unsigned).0.signed) }), dest: zero, src1: src1, src2: .Left(src2)) // Destination doesn't matter
 			let div = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
 			return [div]
-		case "rem", "div":
-			// Pseudoinstructions that store the remainder or quotient of src1/src2 in the destination
+		case "mul", "rem", "div":
+			// Pseudoinstructions that store the product, remainder, or quotient of src1 and src2 in dest
+			// src2 may be a register or an immediate
+			// In the case of mul, the upper 32 bits of the product are ignored; the user may need to account for this
 			if argCount != 3 {
 				print("Instruction \(args[0]) expects 3 arguments, got \(argCount).")
 				return nil
 			}
-			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
-				return nil
+			if validNumericRegex.test(args[3]) {
+				// src2 is an immediate; decompose into 3 instructions
+				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: true), _ = Immediate.parseString(args[3], canReturnTwo: true) else {
+					return nil
+				}
+				// li $at, src2 (which may be 1 or 2 instructions itself)
+				let li = Instruction.parseString("li \(at.name), \(args[3])", location: location, verbose: false)!
+				li[0].labels = labels
+				li[0].comment = comment
+				// mult/div src1, $at
+				let math = Instruction.parseString("\(args[0] == "mul" ? "mult" : "div") \(args[2]), \(at.name)", location: li.last!.location + li.last!.pcIncrement, verbose: false)![0]
+				// mflo/mfhi dest, depending on the pseudo instruction
+				let move = Instruction.parseString("\(args[0] == "rem" ? "mfhi" : "mflo") \(args[1])", location: math.location + math.pcIncrement, verbose: false)![0]
+				return li + [math, move]
+			} else {
+				// src2 is a register; decompose into 2 instructions
+				guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false), _ = Register(args[3], writing: false) else {
+					return nil
+				}
+				// mult/div src1, src2
+				let math = Instruction.parseString("\(args[0] == "mul" ? "mult" : "div") \(args[2]), \(args[3])", location: location, verbose: false)![0]
+				math.labels = labels
+				math.comment = comment
+				// mflo/mfhi dest, depending on the pseudo instruction
+				let move = Instruction.parseString("\(args[0] == "rem" ? "mfhi" : "mflo") \(args[1])", location: math.location + math.pcIncrement, verbose: false)![0]
+				return [math, move]
 			}
-			// Decompose this into 2 instructions
-			// div	src1, src2
-			let div = Instruction.parseString("div \(args[2]), \(args[3])", location: location, verbose: false)![0]
-			div.labels = labels
-			div.comment = comment
-			// mflo	dest/mfhi dest, depending on the pseudo instruction
-			let move = Instruction.parseString("\(args[0] == "rem" ? "mfhi" : "mflo") \(args[1])", location: location + div.pcIncrement, verbose: false)![0]
-			return [div, move]
 		case "bge", "bgt", "ble", "blt":
 			// Branch pseudo instructions, all of which decompose to a combination of slt and beq/bne
 			// bge (branch on greater than or equal) becomes slt $at, src1, src2 and beq $at, $0, dest
@@ -1091,12 +1094,14 @@ class Instruction: CustomStringConvertible {
 			default:
 				slt = Instruction.parseString("slt \(at.name), \(args[2]), \(args[1])", location: location, verbose: false)![0]
 			}
+			slt.labels = labels
+			slt.comment = comment
 			let branch: Instruction
 			switch(args[0]) {
 			case "bge", "ble":
-				branch = Instruction.parseString("beq \(at.name), \(zero.name), \(args[3])", location: location + slt.pcIncrement, verbose: false)![0]
+				branch = Instruction.parseString("beq \(at.name), \(zero.name), \(args[3])", location: slt.location + slt.pcIncrement, verbose: false)![0]
 			default:
-				branch = Instruction.parseString("bne \(at.name), \(zero.name), \(args[3])", location: location + slt.pcIncrement, verbose: false)![0]
+				branch = Instruction.parseString("bne \(at.name), \(zero.name), \(args[3])", location: slt.location + slt.pcIncrement, verbose: false)![0]
 			}
 			// Dependency for the branch instruction is already baked in
 			return [slt, branch]
