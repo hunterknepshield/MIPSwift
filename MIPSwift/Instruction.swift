@@ -121,11 +121,11 @@ class Instruction: CustomStringConvertible {
     var labels = [String]()
 	/// The parsed comment of this instruction, if there was one.
     var comment: String?
-	/// Any potentially unresolved dependencies, like labels, that need more
-	/// information to make this instruction complete. For example, `la	$t0,
-	/// undefined_label` will not be considered executable until undefined_label
-	/// is actually defined, at which point this dependency will be resolved.
-	var unresolvedDependencies = [String]()
+	/// Any potentially unresolved label dependencies that need more information
+	/// to make the instruction complete. For example, `la $t0, undefined_label`
+	/// will not be considered executable until undefined_label is actually
+	/// defined, at which point this dependency can be resolved.
+	var unresolvedLabelDependencies = [String]()
 	/// The final parsed representation of the instruction.
     var type: InstructionType
 	/// The 'pretty' formatting of this instruction's arguments.
@@ -143,8 +143,7 @@ class Instruction: CustomStringConvertible {
 				string += "\(self.arguments[1]), \(self.arguments[2])(\(self.arguments[3]))"
 			} else {
 				// Default formatting for instructions, e.g. add    $t0, $t1, $t2
-				var counter = 0
-				self.arguments.dropFirst().forEach({ string += $0 + (++counter < self.arguments.count - 1 ? ", " : "") })
+				string += self.arguments.dropFirst().joinWithSeparator(", ")
 			}
 			return string
         }
@@ -206,8 +205,14 @@ class Instruction: CustomStringConvertible {
 				encoding |= dest.number << dShift
 				switch(src2) {
 				case .Left(let reg):
-					encoding |= src1.number << sShift
-					encoding |= reg.number << tShift
+					// mfhi and mflo have unusual encodings, they have no real sources to shift in
+					// (src1 is hi/lo and src2 is zero, but this is just an implementation detail)
+					// hi and lo's numbers are -1, so that's the easiest way to identify them
+					if src1.number != -1 {
+						// This isn't a mfhi/mflo instruction
+						encoding |= src1.number << sShift
+						encoding |= reg.number << tShift
+					}
 				case .Right(let shift):
 					encoding |= src1.number << tShift
 					encoding |= shift << hShift
@@ -395,7 +400,7 @@ class Instruction: CustomStringConvertible {
 			}
 			// Have to use a label then resolve
 			let branch = Instruction.parseString("\(instructionName) \(regS), \(assemblerLabel)", location: location, verbose: false)![0]
-			branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+			branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 			return branch
 		case 2, 3:
 			// A jump; needs to pass a label to parseString and then we already know how to resolve it
@@ -405,7 +410,7 @@ class Instruction: CustomStringConvertible {
 			}
 			let destination = (encoding & 0x03FFFFFF) << 2 // Lower 26 bits of the encoding is the offset to the destination shifted right twice
 			let jump = Instruction.parseString("\(instructionName) \(assemblerLabel)", location: location, verbose: false)![0]
-			jump.resolveDependency(assemblerLabel, location: destination)
+			jump.resolveLabelDependency(assemblerLabel, location: destination)
 			return jump
 		default:
 			// An I-type instruction
@@ -423,12 +428,12 @@ class Instruction: CustomStringConvertible {
 			case "beq", "bne":
 				// Have to use a label then resolve
 				let branch = Instruction.parseString("\(instructionName) \(regS), \(regT), \(assemblerLabel)", location: location, verbose: false)![0]
-				branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+				branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 				return branch
 			case "bgtz", "blez":
 				// Have to use a label then resolve
 				let branch = Instruction.parseString("\(instructionName) \(regS), \(assemblerLabel)", location: location, verbose: false)![0]
-				branch.resolveDependency(assemblerLabel, location: (location + imm.signExtended << 2))
+				branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 				return branch
 			default:
 				// Most I-types take 3 arguments
@@ -437,17 +442,17 @@ class Instruction: CustomStringConvertible {
 		}
 	}
 	
-	/// Resolve dependencies (some or all) that this instruction has. For
-	/// example, `la	$t0, undefined_label` needs to know the location of
-	/// undefined_label to be considered fully resolved, at which point,
-	/// self.unresolvedDependencies will have count 0.
+	/// Resolve label dependencies that this instruction has. For example,
+	/// `la	$t0, undefined_label` needs to know the location of undefined_label
+	/// to be considered fully resolved, at which point,
+	/// self.unresolvedLabelDependencies will have count 0.
 	///
 	/// - Parameters:
 	///		- dependency: One of the labels that this instruction depends on.
 	///		- location: The raw location of this label. If this instruction uses
 	///		an offset instead of a full address, then it will be determined
 	///		within this function.
-	func resolveDependency(dependency: String, location: Int32) {
+	func resolveLabelDependency(dependency: String, location: Int32) {
 		switch(self.type) {
 		case let .Jump(link, _):
 			// Overwrite dest with a new value
@@ -492,7 +497,7 @@ class Instruction: CustomStringConvertible {
 			// Should never happen
 			fatalError("Invalid instruction for resolving dependency: \(self)")
 		}
-		self.unresolvedDependencies.removeAtIndex(self.unresolvedDependencies.indexOf(dependency)!)
+		self.unresolvedLabelDependencies.removeAtIndex(self.unresolvedLabelDependencies.indexOf(dependency)!)
 	}
 	
 	/// Initialize one or multiple instructions from a given input string,
@@ -564,11 +569,27 @@ class Instruction: CustomStringConvertible {
 		}
 		
 		let argCount = args.count - 1 // Don't count the actual instruction
-		if String(args[0].characters[0]) == directiveDelimiter {
+		if String(args[0].characters[0]) == directiveDelimiter || (args.count == 3 && args[1] == "=") {
 			// MARK: Directive parsing
 			// Requires a significant amount of additional parsing to make sure arguments are in order
 			// Parsing runs under the assumption that this instruction will immediately be executed,
 			// even if the interpreter's execution is currently paused.
+			
+			if args.count == 3 && args[1] == "=" {
+				// This is an equals directive, which declares a constant, e.g. PRINT_INT_SYSCALL = 1
+				// The constant's name has the same constraints as labels, and the constant must fit in a 32-bit integer
+				if !validLabelRegex.test(args[0]) {
+					print("Invalid constant name: \(args[0])")
+					return nil
+				}
+				guard validNumericRegex.test(args[2]), let _ = Immediate.parseString(args[2], canReturnTwo: true) else {
+					print("Invalid constant value: \(args[2])")
+					return nil
+				}
+				let directive = Instruction(rawString: string, location: location, pcIncrement: 0, arguments: arguments, labels: labels, comment: comment, type: .Directive(directive: .Equals, args: [args[0], args[2]]))
+				return [directive]
+			}
+			
 			guard let dotDirective = DotDirective(rawValue: args[0]) else {
 				print("Invalid directive: \(args[0])")
 				return nil
@@ -684,6 +705,9 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 				pcIncrement = Int32(argCount)*bytesPerArgument
+			case .Equals:
+				// Never reached
+				return nil
 			}
 			let directive = Instruction(rawString: string, location: location, pcIncrement: pcIncrement, arguments: arguments, labels: labels, comment: comment, type: .Directive(directive: dotDirective, args: Array(arguments.dropFirst())))
 			return [directive]
@@ -845,7 +869,7 @@ class Instruction: CustomStringConvertible {
 			}
 			type = .Jump(link: args[0] == "jal", dest: .Right(aaaa.signExtended))
 			let jump = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			jump.unresolvedDependencies.append(args[1])
+			jump.unresolvedLabelDependencies.append(args[1])
 			return [jump]
 		case "jr", "jalr":
 			if argCount != 1 {
@@ -869,7 +893,7 @@ class Instruction: CustomStringConvertible {
 			}
 			type = .Branch(op: args[0] == "beq" ? (==) : (!=), link: false, src1: src1, src2: src2, dest: aaaa)
 			let equal = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			equal.unresolvedDependencies.append(args[3])
+			equal.unresolvedLabelDependencies.append(args[3])
 			return [equal]
 		case "bgez", "bgezal", "bltz", "bltzal", "bgtz", "blez":
 			if argCount != 2 {
@@ -894,7 +918,7 @@ class Instruction: CustomStringConvertible {
 			}
 			type = .Branch(op: op, link: link, src1: src1, src2: nil, dest: aaaa)
 			let compare = Instruction(rawString: string, location: location, pcIncrement: 4, arguments: arguments, labels: labels, comment: comment, type: type)
-			compare.unresolvedDependencies.append(args[2])
+			compare.unresolvedLabelDependencies.append(args[2])
 			return [compare]
 		// MARK: More complex/pseudo instruction parsing
 		case "li":
@@ -947,12 +971,12 @@ class Instruction: CustomStringConvertible {
 			// This must be decomposed into two instructions, since addresses are always 32 bits
 			// lui	dest, src.upper
 			let lui = Instruction.parseString("lui \(args[1]), \(aaaa.value)", location: location, verbose: false)![0]
-			lui.unresolvedDependencies.append(args[2])
+			lui.unresolvedLabelDependencies.append(args[2])
 			lui.labels = labels
 			lui.comment = comment
 			// ori	dest, dest, src.lower
 			let ori = Instruction.parseString("ori \(args[1]), \(args[1]), \(aaaa.value)", location: lui.location + lui.pcIncrement, verbose: false)![0]
-			ori.unresolvedDependencies.append(args[2])
+			ori.unresolvedLabelDependencies.append(args[2])
 			switch(ori.type) {
 			case let .ALUI(_, dest, src1, src2):
 				// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
@@ -995,7 +1019,7 @@ class Instruction: CustomStringConvertible {
 			// Pseudo instruction, transforms to
 			// add	dest, $0, $0
 			if argCount != 1 {
-				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+				print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
 				return nil
 			}
 			guard let _ = Register(args[1], writing: true) else {
@@ -1007,7 +1031,7 @@ class Instruction: CustomStringConvertible {
 			return [add]
 		case "mfhi", "mflo":
 			if argCount != 1 {
-				print("Instruction \(args[0]) expects 2 arguments, got \(argCount).")
+				print("Instruction \(args[0]) expects 1 argument, got \(argCount).")
 				return nil
 			}
 			guard let dest = Register(args[1], writing: true) else {

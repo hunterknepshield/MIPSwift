@@ -20,7 +20,9 @@ class REPL {
     var locationsToInstructions = [Int32 : Instruction]()
 	/// Keeps track of any instructions that have as-of-yet resolved label
 	/// dependencies. For example, j label when label has yet to be defined.
-	var unresolvedInstructions = [String: [Instruction]]()
+	var unresolvedInstructions = [String : [Instruction]]()
+	/// Maps constant declarations to their values.
+	var constantsToValues = [String : Int32]()
 	/// Maps locations in memory to individual bytes.
     var memory = [Int32 : UInt8]()
 	/// The current value of the program counter. Used to avoid constantly
@@ -50,7 +52,8 @@ class REPL {
 	
 	// MARK: Interpreter settings
 	
-	/// The source from which input is currently being read.
+	/// The source from which input is currently being read, may be stdIn or an
+	/// open file.
 	var inputSource: NSFileHandle
 	/// Used to determine whether or not input is being read from a file or
 	/// standard input.
@@ -67,6 +70,8 @@ class REPL {
 	/// Initialize a REPL with supplied settings.
     init(options: REPLOptions) {
         print("Initializing REPL...", terminator: " ")
+		
+		// Set initial REPL options
         self.verbose = options.verbose
         self.autodump = options.autodump
         self.autoexecute = options.autoexecute
@@ -108,12 +113,11 @@ class REPL {
                 } else if let instArray = Instruction.parseString(inputString, location: self.currentWriteLocation, verbose: verbose) {
 					instArray.forEach({ inst in
 						// Ensure all labels in this instruction are fresh
-						let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil })
+						let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil || constantsToValues[$0] != nil })
 						if dupes.count > 0 {
 							// There was at least one duplicate label; don't store/execute anything
-							print("Cannot overwrite label", terminator: dupes.count > 1 ? "s: " : ": ")
-							var counter = 0
-							dupes.forEach({ print($0, terminator: ++counter < dupes.count ? " " : "\n") })
+							print("Cannot duplicate label", terminator: dupes.count > 1 ? "s: " : ": ")
+							print(dupes.joinWithSeparator(", "))
 							return
 						}
 						
@@ -123,18 +127,18 @@ class REPL {
 							if let unresolvedArray = unresolvedInstructions[label] {
 								// There are existing instructions that depend on this label
 								unresolvedArray.forEach({ unresolved in
-									unresolved.resolveDependency(label, location: inst.location)
+									unresolved.resolveLabelDependency(label, location: inst.location)
 								})
 								unresolvedInstructions[label] = nil
 							}
 						})
 						
 						// Attempt to resolve dependencies that this instruction has
-						let unresolved = inst.unresolvedDependencies
+						let unresolved = inst.unresolvedLabelDependencies
 						unresolved.forEach({ label in
 							if let loc = labelsToLocations[label] {
 								// Know the location of this label already
-								inst.resolveDependency(label, location: loc)
+								inst.resolveLabelDependency(label, location: loc)
 							} else {
 								// Don't yet know the location of this label yet; pause execution to avoid issues
 								if self.autoexecute {
@@ -152,6 +156,17 @@ class REPL {
 								}
 							}
 						})
+						
+						// Interesting problem: two obvious options for dealing with constants, both bad...
+						// Option 1: direct string replacement before passing to Instruction.parseString
+						//      - Will cause issues within comments and string literals
+						//      - Will require that constants are defined before being used
+						//      - Will break duplication detection (i.e. suddenly getting 4 = 8 instead of ALREADY_DEFINED = 8)
+						// Option 2: similar to label dependencies; resolve after the fact
+						//      - Will cause problems with instructions like li that depend on knowing the size of the value
+						//      - Will require additional code for any instruction that may use an immediate in Instruction.parseString
+						// TODO: figure out a better solution than either of these
+						
 						switch(inst.type) {
 						case .NonExecutable:
 							// This line contained only labels and/or comments; don't execute anything.
@@ -344,8 +359,19 @@ class REPL {
 		case .Unresolved:
 			// Print any unresolved labels.
 			print("Currently unresolved labels: ", terminator: self.unresolvedInstructions.count == 0 ? "(none)\n" : "")
-			var counter = 0
-			self.unresolvedInstructions.sort({ return $0.0.0 < $0.1.0 }).forEach({ print($0.0, terminator: ++counter < self.unresolvedInstructions.count ? ", " : "\n") })
+			print(self.unresolvedInstructions.keys.sort({ $0 < $1 }).joinWithSeparator(", "))
+		case .ConstantDump:
+			// Print the current constants that are stored
+			print("All constants currently stored: ", terminator: self.constantsToValues.count == 0 ? "(none)\n" : "\n")
+			let alphabetized = self.constantsToValues.sort({ return $0.0.0 < $0.1.0 })
+			alphabetized.forEach({ print("\t\($0.stringByPaddingToLength(24, withString: " ", startingAtIndex: 0)) \($1)") })
+		case .SingleConstant(let constant):
+			// Print the value of the given constant
+			guard let value = constantsToValues[constant] else {
+				print("\(constant): (undefined)")
+				break
+			}
+			print("\(constant): \(value)")
         case .InstructionDump:
             // Print all instructions currently stored
             print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
@@ -395,6 +421,7 @@ class REPL {
 				print("Cannot access memory space at or above 0x80000000. Use a count of \(distanceToLimit/4) or try a lower address.")
 				break
 			}
+			// Get the values out of memory
             for i in 0..<count {
                 let address = location + 4*i // Loading in 4-byte chunks
 				let highest = self.memory[address] ?? 0
@@ -406,6 +433,7 @@ class REPL {
             }
             var counter = 0 // For formatting individual lines
 			var lineString = "" // The string that will be printed
+			// Print the values
             words.forEach({
                 if counter % 4 == 0 {
                     // Make new lines every 16 bytes (4 words)
@@ -467,6 +495,8 @@ class REPL {
             print("\tlabeldump|labels|ld:                            print all labels as well as their locations.")
             print("\tlabel|l [label]:                                print the location of a label.")
 			print("\tunresolved|unres|u:                             print any as-of-yet unresolved labels.")
+			print("\tconstantdump|constdump|constants|consts|cd:     print all constants as well as their values.")
+			print("\tconstant|const|con|c [constant]:                print the value of a constant.")
             print("\tinstructions|insts|instructiondump|instdump|id: print all instructions as well as their locations.")
             print("\tinstruction|inst|i [location|label] (count):    print a number of instructions starting at a location.")
             print("\tmemory|mem|m [location|register|label] (count): print a number of words beginning at a location in memory.")
@@ -477,7 +507,7 @@ class REPL {
             print("\tstatus|settings|s:                              display current interpreter settings.")
             print("\thelp|h|?:                                       display the help message.")
             print("\tabout:                                          display information about this software.")
-            print("\tcommands|cmds|c:                                display this message.")
+            print("\tcommands|cmds:                                  display this message.")
             print("\tnoop|n:                                         do nothing.")
             print("\tfile|f|use|usefile|openfile|open|o [file]:      open a file to read instructions from (auto-execution will be paused).")
             print("\texit|quit|q:                                    exit the interpreter.")
@@ -832,6 +862,20 @@ class REPL {
 				for char in string.unicodeScalars {
 					self.memory[self.currentWriteLocation++] = UInt8(char.value)
 				}
+			case .Equals:
+				// The name and value are guaranteed valid, but the name may not be unique
+				let name = args[0]
+				let value: Int32
+				if let decimal = Int32(args[1]) {
+					value = decimal
+				} else {
+					value = Int32(args[1], radix: 16)!
+				}
+				if self.constantsToValues[name] != nil {
+					print("Cannot duplicate constant: \(name)")
+					break
+				}
+				self.constantsToValues[name] = value
             }
         } else {
             fatalError("Attempting to execute illegal directive: \(instruction)")

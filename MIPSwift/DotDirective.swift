@@ -33,4 +33,6 @@ enum DotDirective: String {
     case Ascii = ".ascii"
 	/// Store a null-terminated string.
     case Asciiz = ".asciiz"
+	/// Store a named constant.
+	case Equals = "="
 }

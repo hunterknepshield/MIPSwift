@@ -24,7 +24,8 @@ enum Command {
     case RegisterDump
 	/// Print the current value of a register.
 	///
-	/// - Parameter register: The name of the register whose value will be printed.
+	/// - Parameter register: The name of the register whose value will be
+	/// printed.
 	case SingleRegister(register: String)
 	/// Toggle auto-dump of registers after execution of every instruction.
     case AutoDump
@@ -32,10 +33,18 @@ enum Command {
     case LabelDump
 	/// Print the location of a label.
 	///
-	/// - Parameter label: The name of the label whose information will be printed.
+	/// - Parameter label: The name of the label whose information will be
+	/// printed.
 	case SingleLabel(label: String)
 	/// Print all as-of-yet unresolved labels.
 	case Unresolved
+	/// Print all constants as well as their values.
+	case ConstantDump
+	/// Print the value of a constant.
+	///
+	/// - Parameter constant: The name of the constant whose information will be
+	/// printed.
+	case SingleConstant(constant: String)
 	/// Print all instructions as well as their locations.
     case InstructionDump
 	/// Print the instruction at a location.
@@ -114,6 +123,19 @@ enum Command {
 			}
 		case "unresolved", "unres", "u":
 			self = .Unresolved
+		case "constantdump", "constdump", "constants", "consts", "cd":
+			self = .ConstantDump
+		case "constant", "const", "con", "c":
+			if argCount != 1 {
+				print("Command \(command) expects 1 argument, got \(argCount).")
+				return nil
+			}
+			if validLabelRegex.test(args[0]) {
+				self = .SingleConstant(constant: args.first!)
+			} else {
+				print("Invalid constant: \(args[0])")
+				return nil
+			}
         case "instructions", "insts", "instructiondump", "instdump", "id":
             self = .InstructionDump
         case "instruction", "inst", "i":
@@ -139,7 +161,7 @@ enum Command {
 			if argCount > 1 {
 				// User also specified a number of words to read
 				guard let num = Int(args[1]) where num > 0 else {
-					print("Invalid number of bytes specified: \(args[1])")
+					print("Invalid count: \(args[1])")
 					return nil
 				}
 				count = num
@@ -174,7 +196,7 @@ enum Command {
 			if argCount > 1 {
 				// User also specified a number of words to read
 				guard let num = Int(args[1]) where num > 0 else {
-					print("Invalid number of bytes specified: \(args[1])")
+					print("Invalid count: \(args[1])")
 					return nil
 				}
 				count = num
@@ -209,7 +231,7 @@ enum Command {
             self = .Status
         case "help", "h", "?":
             self = .Help
-        case "commands", "cmds", "c":
+        case "commands", "cmds":
             self = .Commands
         case "about":
             self = .About
