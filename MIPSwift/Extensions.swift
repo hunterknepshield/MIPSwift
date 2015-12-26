@@ -22,6 +22,26 @@ extension String.CharacterView {
 	}
 }
 
+extension String {
+	/// Get the ith element of self as a String. Relies on String.CharacterView.
+	subscript(i: Int) -> String {
+		return String(self.characters[i])
+	}
+	
+	/// Get the ith element of self as a Character. Relies on
+	/// String.CharacterView.
+	subscript(i: Int) -> Character {
+		return self.characters[i]
+	}
+	
+	/// Get a range of elements of self. Relies on String.CharacterView.
+	subscript(r: Range<Int>) -> String {
+		return self.characters[r]
+	}
+}
+
+// MARK: Dictionary key retrieval
+
 extension Dictionary where Value: Equatable {
 	func keysForValue(value: Value) -> [Key] {
 		return self.filter({ return $0.1 == value }).map({ $0.0 })

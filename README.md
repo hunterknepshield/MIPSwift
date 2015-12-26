@@ -19,9 +19,8 @@ This project is a top-level MIPS interpreter. It runs MIPS 32-bit instructions, 
 - Can't generate executables or linkable object files.
 - Floating point operations, directives, and instructions are not implemented.
 - Overflow handling may still be messy; haven't done enough testing with that yet. No detection or exception handling implementation yet.
-- Replace constants in instructions, e.g. `li $v0, PRINT_INT_SYSCALL` -> `li $v0, 1`.
 - Errors like stack overflow are not checked.
-- Simple C-style operations within immediate values are not supported (i.e. `li $t0, 4<<8`; `sw	$4, FRAME_SIZE-4($sp)`)
+- Simple C-style operations within immediate values are not supported (e.g. `li $t0, 4<<8`; `sw	$4, FRAME_SIZE-4($sp)`)
 
 ## License
 Modification and redistribution of this software is permitted under the MIT License. See LICENSE.txt for more information.

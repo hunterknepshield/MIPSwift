@@ -18,7 +18,7 @@ class REPL {
     var labelsToLocations = [String : Int32]()
 	/// Maps locations in memory to instructions.
     var locationsToInstructions = [Int32 : Instruction]()
-	/// Keeps track of any instructions that have as-of-yet resolved label
+	/// Keeps track of any instructions that have as-of-yet unresolved label
 	/// dependencies. For example, j label when label has yet to be defined.
 	var unresolvedInstructions = [String : [Instruction]]()
 	/// Maps constant declarations to their values.
@@ -94,7 +94,7 @@ class REPL {
         if self.usingFile {
             print("Reading file.")
         } else {
-            print("Ready to read input. Type '\(commandDelimiter)help' for more.")
+            print("Ready to read input. Type '\(commandDelimiter)help' for more information.")
         }
         while true {
             if !self.usingFile {
@@ -102,40 +102,67 @@ class REPL {
                 print("\(self.currentWriteLocation.hexWith0x)> ", terminator: "") // Prints PC without a newline
             }
             let input = readInput() // Read input (whitespace is already trimmed from either end)
-            input.forEach({ inputString in
-                if inputString.rangeOfString(commandDelimiter)?.minElement() == inputString.startIndex || inputString == "" {
-                    // This is a command, not an instruction; parse it as such
+			for var inputString in input {
+				// If this input string is an interpreter command, assume there are no labels or comments to strip
+				// Otherwise, strip them, then proceed with parsing
+				if inputString == "" || inputString[0] == commandDelimiter {
+					// This is a command, not an instruction; parse it as such
 					guard let command = Command(inputString) else {
 						print("Invalid command: \(inputString)")
-						return
+						continue
 					}
-                    executeCommand(command)
-                } else if let instArray = Instruction.parseString(inputString, location: self.currentWriteLocation, verbose: verbose) {
-					instArray.forEach({ inst in
-						// Ensure all labels in this instruction are fresh
-						let dupes = inst.labels.filter({ return labelsToLocations[$0] != nil || constantsToValues[$0] != nil })
-						if dupes.count > 0 {
-							// There was at least one duplicate label; don't store/execute anything
-							print("Cannot duplicate label", terminator: dupes.count > 1 ? "s: " : ": ")
-							print(dupes.joinWithSeparator(", "))
-							return
+					executeCommand(command)
+					continue
+				}
+				let labels = stripLabels(&inputString)
+				if self.verbose && labels.count > 0 {
+					print("Label\(labels.count > 1 ? "s" : ""): \(labels.joinWithSeparator(", "))")
+				}
+				let comment = stripComment(&inputString)
+				if self.verbose && comment != nil {
+					print("Comment: \(comment!)")
+				}
+				var args = splitArgs(inputString)
+				if self.verbose && args.count > 0 {
+					print("Arguments: \(args)")
+				}
+				if args.count == 0 {
+					// This line only contained labels and/or comments, don't execute anything, but store the labels
+					storeLabels(labels, location: self.currentWriteLocation)
+					continue
+				}
+				
+				// Replace all arguments except the first with constants' values if they're exact matches
+				// TODO do this with labels and/or combine constants and labels into one map?
+				// + Would allow constants to be defined in the future and execution would just pause like current behavior with undefined labels
+				// - Would require more parsing logic on any immediate-based instruction, including la/li
+				for (index, arg) in args.dropFirst().enumerate() {
+					if validLabelRegex.test(arg), let value = self.constantsToValues[arg] {
+						// This argument will be replaced with a constant's value
+						if self.verbose {
+							print("Replacing argument \(arg) with value \(value).")
 						}
-						
-						// Store newly defined labels in the dictionary, resolving any previously unresolved dependencies if possible
-						inst.labels.forEach({ label in
-							labelsToLocations[label] = inst.location
-							if let unresolvedArray = unresolvedInstructions[label] {
-								// There are existing instructions that depend on this label
-								unresolvedArray.forEach({ unresolved in
-									unresolved.resolveLabelDependency(label, location: inst.location)
-								})
-								unresolvedInstructions[label] = nil
-							}
-						})
-						
+						args[index + 1] = "\(value)"
+					}
+				}
+				
+				// This line needs to be parsed
+				if args[0][0] == directiveDelimiter || (args.count == 3 && args[1] == "=") {
+					// This is an assembler directive, not an instruction; parse it as such
+					guard let directive = Directive.parseArgs(args) else {
+						continue
+					}
+					executeDirective(directive)
+				} else if let instArray = Instruction.parseArgs(args, location: self.currentWriteLocation, verbose: verbose) {
+					// This instruction is now known to be valid, so store the labels
+					guard storeLabels(labels, location: self.currentWriteLocation) else {
+						// At least one label was invalid (already printed to the user), don't store these instructions
+						continue
+					}
+					for inst in instArray {
 						// Attempt to resolve dependencies that this instruction has
 						let unresolved = inst.unresolvedLabelDependencies
-						unresolved.forEach({ label in
+						for label in unresolved {
 							if let loc = labelsToLocations[label] {
 								// Know the location of this label already
 								inst.resolveLabelDependency(label, location: loc)
@@ -149,85 +176,54 @@ class REPL {
 									}
 									// If a file is being read, the label is likely defined elsewhere already, so don't print anything
 								}
-								if let existingUnresolved = unresolvedInstructions[label] {
-									unresolvedInstructions[label] = existingUnresolved + [inst]
+								if let existingUnresolved = self.unresolvedInstructions[label] {
+									self.unresolvedInstructions[label] = existingUnresolved + [inst]
 								} else {
-									unresolvedInstructions[label] = [inst]
+									self.unresolvedInstructions[label] = [inst]
 								}
-							}
-						})
-						
-						// Interesting problem: two obvious options for dealing with constants, both bad...
-						// Option 1: direct string replacement before passing to Instruction.parseString
-						//      - Will cause issues within comments and string literals
-						//      - Will require that constants are defined before being used
-						//      - Will break duplication detection (i.e. suddenly getting 4 = 8 instead of ALREADY_DEFINED = 8)
-						// Option 2: similar to label dependencies; resolve after the fact
-						//      - Will cause problems with instructions like li that depend on knowing the size of the value
-						//      - Will require additional code for any instruction that may use an immediate in Instruction.parseString
-						// TODO: figure out a better solution than either of these
-						
-						switch(inst.type) {
-						case .NonExecutable:
-							// This line contained only labels and/or comments; don't execute anything.
-							locationsToInstructions[inst.location] = inst
-						case .Directive(_):
-							// This is an assembler directive; always execute these right away
-							executeDirective(inst)
-						default:
-							// Check if this location already contains an instruction
-							if let existingInstruction = locationsToInstructions[inst.location] {
-								switch(existingInstruction.type) {
-								case .NonExecutable:
-									// This is fine; only labels or comments here, just overwrite
-									inst.labels = existingInstruction.labels + inst.labels
-									locationsToInstructions[inst.location] = inst
-								case .Directive(_) where existingInstruction.pcIncrement == 0:
-									// Alright to overwrite a directive as long as its pcIncrement is 0,
-									// e.g. a .data directive
-									break
-								case _ where existingInstruction.pcIncrement == 0:
-									print("PC increment is 0 for \(existingInstruction)")
-									break
-								default:
-									// This is bad; overwriting an executable instruction
-									// This is likely caused by an issue with internal REPL state
-									print("Cannot overwrite existing instruction: \(existingInstruction)")
-								}
-							}
-							
-							// If auto-execution is disabled and there isn't yet a pause location, make one
-							if !self.autoexecute && self.pausedTextLocation == nil {
-								self.pausedTextLocation = inst.location
-							}
-							
-							// Write this instruction's encoding out to memory
-							let encoding = inst.numericEncoding
-							if encoding == INT32_MAX {
-								// Something went wrong...
-								print("\(inst) has no valid encoding.")
-							} else {
-								self.memory[self.currentWriteLocation] = encoding.highestByte
-								self.memory[self.currentWriteLocation + 1] = encoding.higherByte
-								self.memory[self.currentWriteLocation + 2] = encoding.lowerByte
-								self.memory[self.currentWriteLocation + 3] = encoding.lowestByte
-							}
-							
-							// Increment the current location by however much the instruction requires
-							// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
-							locationsToInstructions[self.currentWriteLocation] = inst
-							let newPc = self.currentWriteLocation + inst.pcIncrement
-							self.currentWriteLocation = newPc
-							
-							if self.autoexecute {
-								executeInstruction(inst)
 							}
 						}
-					})
-                } else {
-                    print("Invalid instruction: \(inputString)")
-                }
-            })
+						
+						// Check if this location already contains an instruction
+						if let existingInstruction = self.locationsToInstructions[inst.location] {
+							// This is bad; overwriting an executable instruction
+							// This is likely caused by an issue with internal REPL state
+							print("Cannot overwrite existing instruction: \(existingInstruction)")
+						}
+						
+						self.locationsToInstructions[inst.location] = inst
+						
+						// If auto-execution is disabled and there isn't yet a pause location, make one
+						if !self.autoexecute && self.pausedTextLocation == nil {
+							self.pausedTextLocation = inst.location
+						}
+						
+						// Write this instruction's encoding out to memory
+						let encoding = inst.numericEncoding
+						if encoding == INT32_MAX {
+							// Something went wrong...
+							print("\(inst) has no valid encoding.")
+						} else {
+							self.memory[self.currentWriteLocation] = encoding.highestByte
+							self.memory[self.currentWriteLocation + 1] = encoding.higherByte
+							self.memory[self.currentWriteLocation + 2] = encoding.lowerByte
+							self.memory[self.currentWriteLocation + 3] = encoding.lowestByte
+						}
+						
+						// Increment the current location by however much the instruction requires
+						// Don't set self.registers.pc here though, set it in execution (avoids issues with pausing)
+						self.locationsToInstructions[self.currentWriteLocation] = inst
+						let newPc = self.currentWriteLocation + inst.pcIncrement
+						self.currentWriteLocation = newPc
+						
+						if self.autoexecute {
+							executeInstruction(inst)
+						}
+					}
+				} else {
+					print("Invalid instruction: \(inputString)")
+				}
+			}
         }
     }
 	
@@ -258,6 +254,90 @@ class REPL {
         returnedArray = returnedArray.map({ return $0.canBeConvertedToEncoding(NSASCIIStringEncoding) ? $0 : "\(commandDelimiter)\($0)" })
         return returnedArray
     }
+	
+	/// Strip all labels from an input string using regular expressions. The
+	/// string is modified in place.
+	///
+	/// - Returns: An array of 0 or more valid labels.
+	func stripLabels(inout string: String) -> [String] {
+		var labels = [String]()
+		while case let matches = validLabelDefinitionRegex.match(string) where matches.count > 0 {
+			// Remove the label, trim whitespace, and check again
+			labels.append(matches[0])
+			string.removeRange(string.rangeOfString(matches[0])!)
+			string = string.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+		}
+		return labels.map({ return String($0.characters.dropLast()) }) // Cuts off the trailing colon
+	}
+	
+	/// Strip the comment from an input string using regular expressions. The
+	/// string is modified in place.
+	///
+	/// - Returns: A comment string (including the delimiter), or nil if no
+	///	comment was in this string.
+	func stripComment(inout string: String) -> String? {
+		let matches: [String]
+		if validAsciiDirectiveRegex.test(string) {
+			// This is a .ascii/.asciiz directive, want the second capture group of the regex
+			matches = validAsciiDirectiveRegex.match(string, captureGroup: 2)
+		} else {
+			// This isn't a (valid) .ascii/.asciiz directive, use default parsing
+			matches = validCommentRegex.match(string)
+		}
+		
+		if matches.count > 0 && matches[0] != "" {
+			// Remove the comment, trim whitespace, then return
+			string.removeRange(string.rangeOfString(matches[0])!)
+			string = string.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+			return matches[0]
+		} else {
+			// No comment, but trim whitespace just in case
+			string = string.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
+			return nil
+		}
+	}
+	
+	/// Split an input string into its constituent arguments. Assumes that no
+	/// labels or comments are in the string.
+	///
+	/// - Returns: An array of 0 or more arguments (not checked for validity).
+	func splitArgs(string: String) -> [String] {
+		let defaultSplit = string.componentsSeparatedByCharactersInSet(validInstructionSeparatorsCharacterSet).filter({ return !$0.isEmpty })
+		if validAsciiDirectiveRegex.test(string) {
+			// This is a .ascii/.asciiz directive, want to capture the directive itself and the literal
+			let matches = validAsciiDirectiveRegex.match(string, captureGroup: 1)
+			return [defaultSplit[0], matches[0]]
+		} else {
+			return defaultSplit
+		}
+	}
+	
+	/// Set the given location as the location of the supplied labels.
+	///
+	/// - Returns: A boolean indicating whether or not all labels were
+	/// previously undefined.
+	func storeLabels(labels: [String], location: Int32) -> Bool {
+		// Ensure all labels are fresh; will fail here
+		let dupes = labels.filter({ return self.labelsToLocations[$0] != nil || self.constantsToValues[$0] != nil })
+		if dupes.count > 0 {
+			// There was at least one duplicate label; don't store anything
+			print("Name\(dupes.count > 1 ? "s" : "") already defined: \(dupes.joinWithSeparator(", "))")
+			return false
+		}
+		
+		// Store newly defined labels in the dictionary, resolving any previously unresolved dependencies if possible
+		for label in labels {
+			self.labelsToLocations[label] = location
+			if let unresolvedArray = self.unresolvedInstructions[label] {
+				// There are existing instructions that depend on this label
+				for unresolved in unresolvedArray {
+					unresolved.resolveLabelDependency(label, location: location)
+				}
+				self.unresolvedInstructions[label] = nil
+			}
+		}
+		return true
+	}
 	
 	/// Resume execution from the last executed instruction until it catches up
 	/// and needs new input.
@@ -367,15 +447,15 @@ class REPL {
 			alphabetized.forEach({ print("\t\($0.stringByPaddingToLength(24, withString: " ", startingAtIndex: 0)) \($1)") })
 		case .SingleConstant(let constant):
 			// Print the value of the given constant
-			guard let value = constantsToValues[constant] else {
+			guard let value = self.constantsToValues[constant] else {
 				print("\(constant): (undefined)")
 				break
 			}
 			print("\(constant): \(value)")
         case .InstructionDump:
             // Print all instructions currently stored
-            print("All instructions currently stored: ", terminator: locationsToInstructions.count == 0 ? "(none)\n" : "\n")
-            locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\($0.1.numericEncoding.format(PrintOption.Binary.rawValue))") })
+            print("All instructions currently stored: ", terminator: self.locationsToInstructions.count == 0 ? "(none)\n" : "\n")
+            self.locationsToInstructions.sort({ return $0.0 < $1.0 }).forEach({ print("\t\($0.1.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\($0.1.numericEncoding.format(PrintOption.Binary.rawValue))") })
         case .SingleInstruction(let loc, let count):
             // Print a number of instructions starting at the given location
 			let location: Int32
@@ -383,7 +463,7 @@ class REPL {
 			case .Left(let address):
 				location = address
 			case .Right(let label):
-				guard let address = labelsToLocations[label] else {
+				guard let address = self.labelsToLocations[label] else {
 					print("Undefined label: \(label)")
 					location = INT32_MAX
 					break
@@ -392,7 +472,7 @@ class REPL {
 			}
 			for i in 0..<count {
 				// Instructions are on 4-byte boundaries
-				if let instruction = locationsToInstructions[location + 4*i] {
+				if let instruction = self.locationsToInstructions[location + 4*i] {
 					print("\t\(instruction.description.stringByPaddingToLength(48, withString: " ", startingAtIndex: 0))\(instruction.numericEncoding.format(PrintOption.Binary.rawValue))")
 				} else {
 					print("\t\((location + 4*i).hexWith0x):\t(undefined)")
@@ -406,7 +486,7 @@ class REPL {
 			case .Middle(let reg):
 				location = self.registers.get(reg.name)
             case .Right(let label):
-				guard let loc = labelsToLocations[label] else {
+				guard let loc = self.labelsToLocations[label] else {
 					print("Invalid label: \(label)")
 					return // Can't just break because of nested switch
 				}
@@ -418,7 +498,7 @@ class REPL {
 			let distanceToLimit = memoryLimit - location + 1
 			if Int(distanceToLimit/4) < count {
 				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
-				print("Cannot access memory space at or above 0x80000000. Use a count of \(distanceToLimit/4) or try a lower address.")
+				print("Cannot access memory space above \(memoryLimit.hexWith0x). Use a count of \(distanceToLimit/4) or try a lower address.")
 				break
 			}
 			// Get the values out of memory
@@ -439,7 +519,7 @@ class REPL {
                     // Make new lines every 16 bytes (4 words)
 					print("[\((location + counter*4).hexWith0x)]", terminator: "\t")
                 }
-				lineString += ascii.characters[counter*4..<(counter*4 + 4)]
+				lineString += ascii[counter*4..<(counter*4 + 4)]
                 print($0.hexWith0x, terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
 				if counter % 4 == 0 {
 					// Print the ASCII characters for the values in the most recent 16 bytes
@@ -583,7 +663,7 @@ class REPL {
             let addrRegValue = self.registers.get(addrReg.name)
 			if memoryLimit - addrRegValue < offset.signExtended {
 				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
-				print("Cannot access memory space at or above 0x80000000.")
+				print("Cannot access memory space above \(memoryLimit.hexWith0x).")
 				break // Terminate here in the future?
 			}
             let address = addrRegValue + offset.signExtended // Immediate is offset in bytes
@@ -668,15 +748,9 @@ class REPL {
                 self.registers.set(pc.name, destinationAddress)
                 self.currentTextLocation = destinationAddress
             }
-        case .Directive(_):
-			// Never reached, directives are always executed immediately
-			fatalError("Cannot execute directive as instruction.")
         case .Syscall:
             // Abstract this away; large amount of parsing required
             executeSyscall()
-        case .NonExecutable:
-            // Assume all housekeeping like label storage has already occurred; nothing to do here
-            break
         }
                 
         if self.autodump {
@@ -819,66 +893,57 @@ class REPL {
     }
 	
 	/// Execute an assembler directive.
-    func executeDirective(instruction: Instruction) {
-        if case let .Directive(directive, args) = instruction.type {
-            // Arguments, if any, are guaranteed to be valid at this point
-            switch(directive) {
-            case .Text:
-                self.writingData = false
-            case .Data:
-                self.writingData = true
-            case .Global:
-				// This directive has no real effect in MIPSwift. If the label is already
-				// defined, we don't need to do anything. If it isn't already defined,
-				// there's nothing we can do since we still don't know its location.
+	func executeDirective(directive: Directive) {
+		switch(directive) {
+		case .Text:
+			self.writingData = false
+		case .Data:
+			self.writingData = true
+		case .Global(_):
+			// This directive has no real effect in MIPSwift. If the label is already
+			// defined, we don't need to do anything. If it isn't already defined,
+			// there's nothing we can do since we still don't know its location.
+			break
+		case .Align(let n):
+			// Align current counter to a 2^n-byte boundary
+			let boundary = 1 << n // n = 0 -> boundary = 1, n = 1 -> boundary = 2, n = 2 -> boundary = 4
+			while self.currentWriteLocation % boundary != 0 {
+				self.currentWriteLocation++
+			}
+		case .Space(let n):
+			// Allocate n bytes, which essentially amounts to skipping forward n bytes
+			self.currentWriteLocation += n
+		case .Word(let values):
+			for value in values {
+				self.memory[self.currentWriteLocation++] = value.highestByte
+				self.memory[self.currentWriteLocation++] = value.higherByte
+				self.memory[self.currentWriteLocation++] = value.lowerByte
+				self.memory[self.currentWriteLocation++] = value.lowestByte
+			}
+		case .Half(let values):
+			for value in values {
+				self.memory[self.currentWriteLocation++] = value.upperByte
+				self.memory[self.currentWriteLocation++] = value.lowerByte
+			}
+		case .Byte(let values):
+			for value in values {
+				self.memory[self.currentWriteLocation++] = UInt8(bitPattern: value)
+			}
+		case .Ascii(let string):
+			for char in string.unicodeScalars {
+				self.memory[self.currentWriteLocation++] = UInt8(char.value)
+			}
+		case .Asciiz(let string):
+			for char in string.unicodeScalars {
+				self.memory[self.currentWriteLocation++] = UInt8(char.value)
+			}
+		case .Equals(let name, let value):
+			// The name and value are guaranteed valid, but the name may not be unique
+			if self.constantsToValues[name] != nil {
+				print("Name already defined: \(name)")
 				break
-            case .Align:
-                // Align current counter to a 2^n-byte boundary; increment already calculated
-				self.currentWriteLocation += instruction.pcIncrement
-            case .Space:
-                // Allocate n bytes, which essentially amounts to skipping forward n bytes
-				self.currentWriteLocation += instruction.pcIncrement
-            case .Word:
-                let initialValues = args.map({ return Int32($0)! })
-				for value in initialValues {
-					self.memory[self.currentWriteLocation++] = value.highestByte
-					self.memory[self.currentWriteLocation++] = value.higherByte
-					self.memory[self.currentWriteLocation++] = value.lowerByte
-					self.memory[self.currentWriteLocation++] = value.lowestByte
-				}
-            case .Half:
-                let initialValues = args.map({ return Int16($0)! })
-				for value in initialValues {
-					self.memory[self.currentWriteLocation++] = value.upperByte
-					self.memory[self.currentWriteLocation++] = value.lowerByte
-				}
-            case .Byte:
-                let initialValues = args.map({ return Int8($0)! })
-				for value in initialValues {
-					self.memory[self.currentWriteLocation++] = UInt8(bitPattern: value)
-				}
-            case .Ascii, .Asciiz:
-				let string = args[0] // Already has the null terminator if appropriate, sequences are escaped
-				for char in string.unicodeScalars {
-					self.memory[self.currentWriteLocation++] = UInt8(char.value)
-				}
-			case .Equals:
-				// The name and value are guaranteed valid, but the name may not be unique
-				let name = args[0]
-				let value: Int32
-				if let decimal = Int32(args[1]) {
-					value = decimal
-				} else {
-					value = Int32(args[1], radix: 16)!
-				}
-				if self.constantsToValues[name] != nil {
-					print("Cannot duplicate constant: \(name)")
-					break
-				}
-				self.constantsToValues[name] = value
-            }
-        } else {
-            fatalError("Attempting to execute illegal directive: \(instruction)")
-        }
+			}
+			self.constantsToValues[name] = value
+		}
     }
 }

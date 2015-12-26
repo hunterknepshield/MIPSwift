@@ -44,7 +44,7 @@ struct Immediate {
 			// Was able to generate a number from hex
 			return (Immediate(Int16(truncatingBitPattern: twoImms & 0xFFFF)), Immediate(Int16(truncatingBitPattern: twoImms >> 16)))
 		}
-		// TODO implement basic math operations in immediate parsing, e.g. li	$t0, 4 << 8
+		// TODO implement basic math operations in immediate parsing, e.g. li	$t0, 4<<8
 		// Unable to generate a decimal or hex value, 16 or 32 bits, time to just fail
 		return nil
 	}

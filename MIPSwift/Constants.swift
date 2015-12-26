@@ -85,7 +85,7 @@ let v0 = Register("$v0", writing: true, user: false)!
 /// The register $v1, which is used for return values, including in syscalls.
 let v1 = Register("$v1", writing: true, user: false)!
 
-// MARK: String parsing constants
+// MARK: String parsing constants and regular expressions
 
 /// Marks the beginning of an interpreter command, e.g. :help.
 let commandDelimiter = ":"
@@ -109,15 +109,26 @@ let validInstructionSeparators = "(), \t"
 /// instruction strings that separates arguments.
 let validInstructionSeparatorsCharacterSet = NSCharacterSet(charactersInString: validInstructionSeparators)
 /// A regular expression that matches only valid labels. All valid labels must
-/// be alphanumeric, and must start with a letter.
-let validLabelRegex = Regex("^[a-zA-Z][\\da-zA-Z_]*$")!
+/// be alphanumeric, must start with a letter, and must be at the beginning of
+/// the string.
+let validLabelRegex = Regex("^[a-zA-Z][\\w]*$")!
 /// A regular expression that matches only valid label definitions. Similar to
-/// validLabelRegex, but includes consideration for a label being anywhere in a
-/// string and also the ending colon delimiter.
-let validLabelDefinitionRegex = Regex("[a-zA-Z][\\da-zA-Z_]*:")!
+/// validLabelRegex, but includes consideration for the ending colon delimiter.
+let validLabelDefinitionRegex = Regex("^[a-zA-Z][\\w]*\(labelDelimiter)")!
+/// A regular expression that matches comments at the end of a string.
+let validCommentRegex = Regex("\(commentDelimiter).*$")!
 /// A regular expression that matches only valid string literals, with
 /// consideration for escape sequences.
 let validStringLiteralRegex = Regex("\"([^\"\\\\]|\\\\.)*\"")!
+/// A regular expression that matches only valid .ascii and .asciiz directives.
+/// These directives are the messiest to parse because their string literals may
+/// contain escape sequences, other (escaped) string literal delimiters, comment
+/// delimiters, etc.
+///
+/// This regex has two capture groups. The first captures the string literal
+/// argument, excluding the quotes. The second captures the comment, if there is
+/// one.
+let validAsciiDirectiveRegex = Regex("^\\.asciiz?\\s+\"((?:[^\"\\\\]|\\\\.)*)\"\\s*(\(commentDelimiter).*)?$")!
 /// A regular expression that matches a valid number, either in decimal or
 /// hexadecimal.
 let validNumericRegex = Regex("^((0[xX][\\da-fA-F]+)|(-?\\d+))$")!

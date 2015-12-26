@@ -26,15 +26,28 @@ class Regex {
         }
     }
 	
-	/// Get all valid matches of self in the supplied string.
-	func match(testString: String) -> [String] {
-		let test = self.expression.matchesInString(testString, options: [], range: NSMakeRange(0, testString.characters.count))
+	/// Get all valid matches of self in the supplied string. Can optionally
+	/// return a specific capture group's value. Will fail at run time if the
+	/// capture group specified exceeds the number of capture groups within the
+	/// regular expression.
+	///
+	/// - Parameters:
+	///		- testString: The string to match.
+	///		- captureGroup: The number (starting at 1) of the capture group to
+	///		return. Defaults to no specific capture group (0), returning the entire
+	///		match.
+	func match(testString: String, captureGroup: Int = 0) -> [String] {
+		let matches = self.expression.matchesInString(testString, options: [], range: NSMakeRange(0, testString.characters.count))
 		var result = [String]()
-		test.forEach({
-			let nsrange = $0.range
+		for match in matches {
+			let nsrange = match.rangeAtIndex(captureGroup)
+			if nsrange.location.toIntMax() == IntMax.max {
+				// The capture group had an empty result for this match
+				continue
+			}
 			let range = Range(start: testString.startIndex.advancedBy(nsrange.location), end: testString.startIndex.advancedBy(nsrange.location + nsrange.length))
 			result.append(testString.substringWithRange(range))
-		})
+		}
 		return result
 	}
 	

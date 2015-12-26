@@ -96,7 +96,7 @@ enum Command {
         }
 		let strippedString = String(string.characters.dropFirst())
         let commandAndArgs = strippedString.componentsSeparatedByCharactersInSet(NSCharacterSet.whitespaceCharacterSet())
-		let command = commandAndArgs.first!
+		let command = commandAndArgs[0]
 		let args = Array(commandAndArgs.dropFirst()) // May be empty
 		let argCount = args.count
         switch(command) {
@@ -116,7 +116,7 @@ enum Command {
 				return nil
 			}
 			if validLabelRegex.test(args[0]) {
-				self = .SingleLabel(label: args.first!)
+				self = .SingleLabel(label: args[0])
 			} else {
 				print("Invalid label: \(args[0])")
 				return nil
@@ -131,7 +131,7 @@ enum Command {
 				return nil
 			}
 			if validLabelRegex.test(args[0]) {
-				self = .SingleConstant(constant: args.first!)
+				self = .SingleConstant(constant: args[0])
 			} else {
 				print("Invalid constant: \(args[0])")
 				return nil
