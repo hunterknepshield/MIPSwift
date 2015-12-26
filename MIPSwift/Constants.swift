@@ -126,9 +126,16 @@ let validStringLiteralRegex = Regex("\"([^\"\\\\]|\\\\.)*\"")!
 /// delimiters, etc.
 ///
 /// This regex has two capture groups. The first captures the string literal
-/// argument, excluding the quotes. The second captures the comment, if there is
+/// argument, including the quotes. The second captures the comment, if there is
 /// one.
-let validAsciiDirectiveRegex = Regex("^\\.asciiz?\\s+\"((?:[^\"\\\\]|\\\\.)*)\"\\s*(\(commentDelimiter).*)?$")!
+let validAsciiDirectiveRegex = Regex("^\\.asciiz?\\s+(\"(?:[^\"\\\\]|\\\\.)*\")\\s*(\(commentDelimiter).*)?$")!
+/// A regular expression that matches only valid equals directives. These
+/// directives are also fairly messy to parse because they may contain no
+/// whitespace.
+///
+/// This regex has two capture groups. The first captures the string that gives
+/// the name of the constant. The second captures its value.
+let validEqualsDirectiveRegex = Regex("^([a-zA-Z][\\w]*)\\s*=\\s*((?:0[xX][\\da-fA-F]+)|(?:-?\\d+))$")!
 /// A regular expression that matches a valid number, either in decimal or
 /// hexadecimal.
 let validNumericRegex = Regex("^((0[xX][\\da-fA-F]+)|(-?\\d+))$")!

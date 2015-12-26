@@ -308,22 +308,22 @@ class Instruction: CustomStringConvertible {
 			switch(instructionName) {
 			case "syscall":
 				// The one really weird one; no arguments
-				return Instruction.parseArgs([instructionName], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName], location: location)![0]
 			case "mult", "multu", "div", "divu":
 				// Only have 2 arguments
-				return Instruction.parseArgs([instructionName, regS, regT], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regS, regT], location: location)![0]
 			case "mfhi", "mflo":
 				// Only have 1 argument
-				return Instruction.parseArgs([instructionName, regD], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regD], location: location)![0]
 			case "jr", "jalr":
 				// Only have 1 argument
-				return Instruction.parseArgs([instructionName, regS], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regS], location: location)![0]
 			case "sll", "srl", "sra":
 				// Shift instructions; they have 3 arguments, but one is the shift amount instead of regS
-				return Instruction.parseArgs([instructionName, regD, regT, "\(shift)"], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regD, regT, "\(shift)"], location: location)![0]
 			default:
 				// Most R-types take the usual 3 arguments
-				return Instruction.parseArgs([instructionName, regD, regS, regT], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regD, regS, regT], location: location)![0]
 			}
 		case 1:
 			// bgez, bgezal, bltz, and bltzal all have an opcode of 1, but have different values for t
@@ -340,7 +340,7 @@ class Instruction: CustomStringConvertible {
 				instructionName = "bgezal"
 			}
 			// Have to use a label then resolve
-			let branch = Instruction.parseArgs([instructionName, regS, assemblerLabel], location: location, verbose: false)![0]
+			let branch = Instruction.parseArgs([instructionName, regS, assemblerLabel], location: location)![0]
 			branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 			return branch
 		case 2, 3:
@@ -350,7 +350,7 @@ class Instruction: CustomStringConvertible {
 				return nil
 			}
 			let destination = (encoding & 0x03FFFFFF) << 2 // Lower 26 bits of the encoding is the offset to the destination shifted right twice
-			let jump = Instruction.parseArgs([instructionName, assemblerLabel], location: location, verbose: false)![0]
+			let jump = Instruction.parseArgs([instructionName, assemblerLabel], location: location)![0]
 			jump.resolveLabelDependency(assemblerLabel, location: destination)
 			return jump
 		default:
@@ -362,23 +362,23 @@ class Instruction: CustomStringConvertible {
 			switch(instructionName) {
 			case "lui":
 				// Takes 2 arguments
-				return Instruction.parseArgs([instructionName, regT, "\(imm.value)"], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regT, "\(imm.value)"], location: location)![0]
 			case "lw", "lh", "lhu", "lb", "lbu", "sw", "sh", "sb":
 				// Special formatting for memory operations, but they take 3 arguments
-				return Instruction.parseArgs([instructionName, regT, "\(imm.value)", regS], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regT, "\(imm.value)", regS], location: location)![0]
 			case "beq", "bne":
 				// Have to use a label then resolve
-				let branch = Instruction.parseArgs([instructionName, regS, regT, assemblerLabel], location: location, verbose: false)![0]
+				let branch = Instruction.parseArgs([instructionName, regS, regT, assemblerLabel], location: location)![0]
 				branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 				return branch
 			case "bgtz", "blez":
 				// Have to use a label then resolve
-				let branch = Instruction.parseArgs([instructionName, regS, assemblerLabel], location: location, verbose: false)![0]
+				let branch = Instruction.parseArgs([instructionName, regS, assemblerLabel], location: location)![0]
 				branch.resolveLabelDependency(assemblerLabel, location: (location + imm.signExtended << 2))
 				return branch
 			default:
 				// Most I-types take 3 arguments
-				return Instruction.parseArgs([instructionName, regT, regS, "\(imm.value)"], location: location, verbose: false)![0]
+				return Instruction.parseArgs([instructionName, regT, regS, "\(imm.value)"], location: location)![0]
 			}
 		}
 	}
@@ -450,7 +450,7 @@ class Instruction: CustomStringConvertible {
 	///
 	/// - Returns: An array of Instruction objects, all of which are guaranteed
 	/// to be simple.
-	class func parseArgs(args: [String], location: Int32, verbose: Bool) -> [Instruction]? {
+	class func parseArgs(args: [String], location: Int32, verbose: Bool = false) -> [Instruction]? {
 		let argCount = args.count - 1 // Don't count the actual instruction
 		let type: InstructionType
 		switch(args[0]) {
@@ -672,15 +672,15 @@ class Instruction: CustomStringConvertible {
 			if src.1 == nil {
 				// Decomposes into an addi with zero; the immediate fits within 16 bits
 				// addi	dest, $0, src.lower
-				let addi = Instruction.parseArgs(["addi", args[1], zero.name, "\(src.0.value)"], location: location, verbose: false)![0]
+				let addi = Instruction.parseArgs(["addi", args[1], zero.name, "\(src.0.value)"], location: location)![0]
 				return [addi]
 			} else {
 				// This must be decomposed into two instructions; the immediate is larger than 16 bits
 				let src2 = src.1!.value
 				// lui	dest, src.upper
-				let lui = Instruction.parseArgs(["lui", args[1], "\(src2)"], location: location, verbose: false)![0]
+				let lui = Instruction.parseArgs(["lui", args[1], "\(src2)"], location: location)![0]
 				// ori	dest, dest, src.lower
-				let ori = Instruction.parseArgs(["ori", args[1], args[1], "\(src.0.value)"], location: lui.location + lui.pcIncrement, verbose: false)![0]
+				let ori = Instruction.parseArgs(["ori", args[1], args[1], "\(src.0.value)"], location: lui.location + lui.pcIncrement)![0]
 				switch(ori.type) {
 				case let .ALUI(_, dest, src1, src2):
 					// The operation needs to be modified so that sign bits aren't extended to ensure proper operation
@@ -705,10 +705,10 @@ class Instruction: CustomStringConvertible {
 			}
 			// This must be decomposed into two instructions, since addresses are always 32 bits
 			// lui	dest, src.upper
-			let lui = Instruction.parseArgs(["lui", args[1], "\(aaaa.value)"], location: location, verbose: false)![0]
+			let lui = Instruction.parseArgs(["lui", args[1], "\(aaaa.value)"], location: location)![0]
 			lui.unresolvedLabelDependencies.append(args[2])
 			// ori	dest, dest, src.lower
-			let ori = Instruction.parseArgs(["ori", args[1], args[1], "\(aaaa.value)"], location: lui.location + lui.pcIncrement, verbose: false)![0]
+			let ori = Instruction.parseArgs(["ori", args[1], args[1], "\(aaaa.value)"], location: lui.location + lui.pcIncrement)![0]
 			ori.unresolvedLabelDependencies.append(args[2])
 			switch(ori.type) {
 			case let .ALUI(_, dest, src1, src2):
@@ -730,7 +730,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
 				return nil
 			}
-			let add = Instruction.parseArgs(["add", args[1], args[2], zero.name], location: location, verbose: false)![0]
+			let add = Instruction.parseArgs(["add", args[1], args[2], zero.name], location: location)![0]
 			return [add]
 		case "not":
 			// Pseudo instruction, transforms to
@@ -742,7 +742,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true), _ = Register(args[2], writing: false) else {
 				return nil
 			}
-			let nor = Instruction.parseArgs(["nor", args[1], args[2], zero.name], location: location, verbose: false)![0]
+			let nor = Instruction.parseArgs(["nor", args[1], args[2], zero.name], location: location)![0]
 			return [nor]
 		case "clear":
 			// Pseudo instruction, transforms to
@@ -754,7 +754,7 @@ class Instruction: CustomStringConvertible {
 			guard let _ = Register(args[1], writing: true) else {
 				return nil
 			}
-			let add = Instruction.parseArgs(["add", args[1], zero.name, zero.name], location: location, verbose: false)![0]
+			let add = Instruction.parseArgs(["add", args[1], zero.name, zero.name], location: location)![0]
 			return [add]
 		case "mfhi", "mflo":
 			if argCount != 1 {
@@ -804,11 +804,11 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 				// li $at, src2 (which may be 1 or 2 instructions itself)
-				let li = Instruction.parseArgs(["li", at.name, args[3]], location: location, verbose: false)!
+				let li = Instruction.parseArgs(["li", at.name, args[3]], location: location)!
 				// mult/div src1, $at
-				let math = Instruction.parseArgs([args[0] == "mul" ? "mult" : "div", args[2], at.name], location: li.last!.location + li.last!.pcIncrement, verbose: false)![0]
+				let math = Instruction.parseArgs([args[0] == "mul" ? "mult" : "div", args[2], at.name], location: li.last!.location + li.last!.pcIncrement)![0]
 				// mflo/mfhi dest, depending on the pseudo instruction
-				let move = Instruction.parseArgs([args[0] == "rem" ? "mfhi" : "mflo", args[1]], location: math.location + math.pcIncrement, verbose: false)![0]
+				let move = Instruction.parseArgs([args[0] == "rem" ? "mfhi" : "mflo", args[1]], location: math.location + math.pcIncrement)![0]
 				return li + [math, move]
 			} else {
 				// src2 is a register; decompose into 2 instructions
@@ -816,9 +816,9 @@ class Instruction: CustomStringConvertible {
 					return nil
 				}
 				// mult/div src1, src2
-				let math = Instruction.parseArgs([args[0] == "mul" ? "mult" : "div", args[2], args[3]], location: location, verbose: false)![0]
+				let math = Instruction.parseArgs([args[0] == "mul" ? "mult" : "div", args[2], args[3]], location: location)![0]
 				// mflo/mfhi dest, depending on the pseudo instruction
-				let move = Instruction.parseArgs([args[0] == "rem" ? "mfhi" : "mflo", args[1]], location: math.location + math.pcIncrement, verbose: false)![0]
+				let move = Instruction.parseArgs([args[0] == "rem" ? "mfhi" : "mflo", args[1]], location: math.location + math.pcIncrement)![0]
 				return [math, move]
 			}
 		case "bge", "bgt", "ble", "blt":
@@ -848,8 +848,8 @@ class Instruction: CustomStringConvertible {
 			default:
 				comparison = "bne"
 			}
-			let slt = Instruction.parseArgs(["slt", at.name, args1First ? args[1] : args[2], args1First ? args[2] : args[1]], location: location, verbose: false)![0]
-			let branch = Instruction.parseArgs([comparison, at.name, zero.name, args[3]], location: slt.location + slt.pcIncrement, verbose: false)![0]
+			let slt = Instruction.parseArgs(["slt", at.name, args1First ? args[1] : args[2], args1First ? args[2] : args[1]], location: location)![0]
+			let branch = Instruction.parseArgs([comparison, at.name, zero.name, args[3]], location: slt.location + slt.pcIncrement)![0]
 			// Dependency for the branch instruction is already baked in
 			return [slt, branch]
 		default:

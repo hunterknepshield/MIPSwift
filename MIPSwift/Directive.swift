@@ -36,7 +36,7 @@ enum Directive {
 	/// Store a named constant.
 	case Equals(name: String, value: Int32)
 	
-	static func parseArgs(args: [String]) -> Directive? {
+	init?(_ args: [String]) {
 		if args.count == 3 && args[1] == "=" {
 			// This is an equals directive, which declares a constant, e.g. PRINT_INT_SYSCALL = 1
 			// The constant's name has the same constraints as labels, and the constant must fit in a 32-bit integer
@@ -52,9 +52,10 @@ enum Directive {
 			if let decimal = Int32(args[2]) {
 				value = decimal
 			} else {
-				value = Int32(args[2], radix: 16)!
+				value = Int32(args[2].stringByReplacingOccurrencesOfString("0x", withString: ""), radix: 16)!
 			}
-			return .Equals(name: args[0], value: value)
+			self = .Equals(name: args[0], value: value)
+			return
 		}
 		
 		let strippedString = String(args[0].characters.dropFirst())
@@ -65,13 +66,13 @@ enum Directive {
 				print("Directive \(strippedString) expects 0 arguments, got \(argCount).")
 				return nil
 			}
-			return .Text
+			self = .Text
 		case "data":
 			if argCount != 0 {
 				print("Directive \(strippedString) expects 0 arguments, got \(argCount).")
 				return nil
 			}
-			return .Data
+			self = .Data
 		case "globl":
 			if argCount != 1 {
 				print("Directive \(strippedString) expects 1 argument, got \(argCount).")
@@ -80,7 +81,7 @@ enum Directive {
 				print("Invalid label: \(args[1])")
 				return nil
 			}
-			return .Global(label: args[1])
+			self = .Global(label: args[1])
 		case "align":
 			if argCount != 1 {
 				print("Directive \(strippedString) expects 1 argument, got \(argCount).")
@@ -90,7 +91,7 @@ enum Directive {
 				return nil
 			}
 			let n = Int32(args[1])! // Can safely force this optional
-			return .Align(n: n)
+			self = .Align(n: n)
 		case "space":
 			if argCount != 1 {
 				print("Directive \(strippedString) expects 1 argument, got \(argCount).")
@@ -100,7 +101,7 @@ enum Directive {
 				print("Invalid number of bytes to allocate: \(args[1])")
 				return nil
 			}
-			return .Space(n: n)
+			self = .Space(n: n)
 		case "byte":
 			if argCount == 0 {
 				print("Directive \(strippedString) expects 1 or more arguments, got 0.")
@@ -119,7 +120,7 @@ enum Directive {
 				print("Invalid argument\(invalid.count > 1 ? "s" : ""): \(invalid.joinWithSeparator(", "))")
 				return nil
 			}
-			return .Byte(values: values)
+			self = .Byte(values: values)
 		case "half":
 			if argCount == 0 {
 				print("Directive \(strippedString) expects 1 or more arguments, got 0.")
@@ -138,7 +139,7 @@ enum Directive {
 				print("Invalid argument\(invalid.count > 1 ? "s" : ""): \(invalid.joinWithSeparator(", "))")
 				return nil
 			}
-			return .Half(values: values)
+			self = .Half(values: values)
 		case "word":
 			if argCount == 0 {
 				print("Directive \(strippedString) expects 1 or more arguments, got 0.")
@@ -157,17 +158,18 @@ enum Directive {
 				print("Invalid argument\(invalid.count > 1 ? "s" : ""): \(invalid.joinWithSeparator(", "))")
 				return nil
 			}
-			return .Word(values: values)
+			self = .Word(values: values)
 		case "ascii", "asciiz":
 			if argCount != 1 {
 				print("Directive \(strippedString) expects 1 argument, got \(argCount).")
 				return nil
 			}
-			guard let escapedArgument = args[1].compressedEscapes else {
+			let noDelimiters = args[1][1..<args[1].characters.count - 1]
+			guard let escapedArgument = noDelimiters.compressedEscapes else {
 				print("Invalid string literal: \(args[1])")
 				return nil
 			}
-			return (args[0] == ".ascii" ? .Ascii(string: escapedArgument) : .Asciiz(string: escapedArgument + "\0"))
+			self = (args[0] == ".ascii" ? .Ascii(string: escapedArgument) : .Asciiz(string: escapedArgument + "\0"))
 		default:
 			print("Invalid directive: \(args[0])")
 			return nil

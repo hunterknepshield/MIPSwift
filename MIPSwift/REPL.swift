@@ -133,6 +133,7 @@ class REPL {
 				}
 				
 				// Replace all arguments except the first with constants' values if they're exact matches
+				// Don't need to worry about string literals because they still have the delimiters at this point, which valid names can never have
 				// TODO do this with labels and/or combine constants and labels into one map?
 				// + Would allow constants to be defined in the future and execution would just pause like current behavior with undefined labels
 				// - Would require more parsing logic on any immediate-based instruction, including la/li
@@ -149,11 +150,11 @@ class REPL {
 				// This line needs to be parsed
 				if args[0][0] == directiveDelimiter || (args.count == 3 && args[1] == "=") {
 					// This is an assembler directive, not an instruction; parse it as such
-					guard let directive = Directive.parseArgs(args) else {
+					guard let directive = Directive(args) else {
 						continue
 					}
 					executeDirective(directive)
-				} else if let instArray = Instruction.parseArgs(args, location: self.currentWriteLocation, verbose: verbose) {
+				} else if let instArray = Instruction.parseArgs(args, location: self.currentWriteLocation, verbose: self.verbose) {
 					// This instruction is now known to be valid, so store the labels
 					guard storeLabels(labels, location: self.currentWriteLocation) else {
 						// At least one label was invalid (already printed to the user), don't store these instructions
@@ -307,6 +308,11 @@ class REPL {
 			// This is a .ascii/.asciiz directive, want to capture the directive itself and the literal
 			let matches = validAsciiDirectiveRegex.match(string, captureGroup: 1)
 			return [defaultSplit[0], matches[0]]
+		} else if validEqualsDirectiveRegex.test(string) {
+			// This is an equals directive, want to capture the name of the constant and its value
+			let nameMatches = validEqualsDirectiveRegex.match(string, captureGroup: 1)
+			let valueMatches = validEqualsDirectiveRegex.match(string, captureGroup: 2)
+			return [nameMatches[0], "=", valueMatches[0]]
 		} else {
 			return defaultSplit
 		}
