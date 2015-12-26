@@ -81,11 +81,11 @@ class REPL {
         self.usingFile = options.usingFile
         
         // Set initial register values
-        self.registers.set(pc.name, beginningText)
-        self.registers.set(sp.name, beginningSp)
-		self.registers.set(fp.name, beginningSp)
-		self.registers.set(gp.name, beginningData)
-		self.registers.set(ra.name, beginningRa)
+        self.registers.set(pc, beginningText)
+        self.registers.set(sp, beginningSp)
+		self.registers.set(fp, beginningSp)
+		self.registers.set(gp, beginningData)
+		self.registers.set(ra, beginningRa)
     }
 	
 	/// Begin reading input. This function will continue running until either an
@@ -108,12 +108,13 @@ class REPL {
 				if inputString == "" || inputString[0] == commandDelimiter {
 					// This is a command, not an instruction; parse it as such
 					guard let command = Command(inputString) else {
-						print("Invalid command: \(inputString)")
 						continue
 					}
 					executeCommand(command)
 					continue
 				}
+				
+				// Main parsing logic begins here
 				let labels = stripLabels(&inputString)
 				if self.verbose && labels.count > 0 {
 					print("Label\(labels.count > 1 ? "s" : ""): \(labels.joinWithSeparator(", "))")
@@ -149,15 +150,17 @@ class REPL {
 				
 				// This line needs to be parsed
 				if args[0][0] == directiveDelimiter || (args.count == 3 && args[1] == "=") {
-					// This is an assembler directive, not an instruction; parse it as such
-					guard let directive = Directive(args) else {
+					// This is a directive
+					guard let directive = Directive(args) where storeLabels(labels, location: self.currentWriteLocation) else {
+						// Invalid directive or labels; printing of errors is done
 						continue
 					}
+					// Always execute directives right away; they may define global data or affect REPL state that needs to be accessed immediately
 					executeDirective(directive)
-				} else if let instArray = Instruction.parseArgs(args, location: self.currentWriteLocation, verbose: self.verbose) {
-					// This instruction is now known to be valid, so store the labels
-					guard storeLabels(labels, location: self.currentWriteLocation) else {
-						// At least one label was invalid (already printed to the user), don't store these instructions
+				} else {
+					// This is an instruction
+					guard let instArray = Instruction.parseArgs(args, location: self.currentWriteLocation, verbose: self.verbose) where storeLabels(labels, location: self.currentWriteLocation) else {
+						// Invalid instruction or labels; printing of errors is done
 						continue
 					}
 					for inst in instArray {
@@ -221,8 +224,6 @@ class REPL {
 							executeInstruction(inst)
 						}
 					}
-				} else {
-					print("Invalid instruction: \(inputString)")
 				}
 			}
         }
@@ -318,10 +319,11 @@ class REPL {
 		}
 	}
 	
-	/// Set the given location as the location of the supplied labels.
+	/// Set the given location as the location of the supplied labels. Also
+	/// resolves any existing dependencies if a label happens to satisfy any.
 	///
 	/// - Returns: A boolean indicating whether or not all labels were
-	/// previously undefined.
+	/// previously undefined. If false, the duplicate labels will be printed.
 	func storeLabels(labels: [String], location: Int32) -> Bool {
 		// Ensure all labels are fresh; will fail here
 		let dupes = labels.filter({ return self.labelsToLocations[$0] != nil || self.constantsToValues[$0] != nil })
@@ -426,10 +428,10 @@ class REPL {
         case .RegisterDump:
             // Print the current contents of the register file
             print(registers)
-        case .SingleRegister(let name):
-            // Register name is already guaranteed to be valid (checked in Command construction)
-            let value = self.registers.get(name)
-            print("\(name): \(value.format(self.registers.printOption.rawValue))")
+        case .SingleRegister(let reg):
+            // Register is already guaranteed to be valid (checked in Command initializer)
+            let value = self.registers.get(reg)
+            print("\(reg.name): \(value.format(self.registers.printOption.rawValue))")
         case .LabelDump:
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
             print("All labels currently stored: ", terminator: self.labelsToLocations.count == 0 ? "(none)\n" : "\n")
@@ -490,7 +492,7 @@ class REPL {
             case .Left(let int):
                 location = int
 			case .Middle(let reg):
-				location = self.registers.get(reg.name)
+				location = self.registers.get(reg)
             case .Right(let label):
 				guard let loc = self.labelsToLocations[label] else {
 					print("Invalid label: \(label)")
@@ -501,6 +503,11 @@ class REPL {
             // Print count*4 bytes of memory starting at location
             var words = [Int32]()
 			var ascii = "" // Queue up ASCII representations of memory values to print after each line, similar to hexdump
+			if location.unsigned > memoryLimit.unsigned {
+				// This operation would cause integer overflow if it were to continue.
+				print("Cannot access memory space above \(memoryLimit.hexWith0x).")
+				break
+			}
 			let distanceToLimit = memoryLimit - location + 1
 			if Int(distanceToLimit/4) < count {
 				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
@@ -639,35 +646,35 @@ class REPL {
         // Update the current location
         let newLocation = instruction.location + instruction.pcIncrement
         self.currentWriteLocation = newLocation
-		self.registers.set(pc.name, newLocation)
+		self.registers.set(pc, newLocation)
 		
         switch(instruction.type) {
         case let .ALUR(op, dest, src1, src2):
-            let src1Value = self.registers.get(src1.name)
+            let src1Value = self.registers.get(src1)
 			let src2Value: Int32
 			switch(src2) {
 			case .Left(let reg):
-				src2Value = self.registers.get(reg.name)
+				src2Value = self.registers.get(reg)
 			case .Right(let shift):
 				src2Value = shift
 			}
             switch(op) {
             case .Left(let op32):
                 let result = op32(src1Value, src2Value)
-                self.registers.set(dest.name, result)
+                self.registers.set(dest, result)
             case .Right(let op64):
                 // This instruction generates a 64-bit result, whose value will be stored in hi and lo
                 let (hiValue, loValue) = op64(src1Value, src2Value)
-                self.registers.set(hi.name, hiValue)
-                self.registers.set(lo.name, loValue)
+                self.registers.set(hi, hiValue)
+                self.registers.set(lo, loValue)
             }
         case let .ALUI(op, dest, src1, src2):
-            let src1Value = self.registers.get(src1.name)
+            let src1Value = self.registers.get(src1)
 			let result = op(src1Value, src2.signExtended)
-			self.registers.set(dest.name, result)
+			self.registers.set(dest, result)
         case let .Memory(storing, unsigned, size, memReg, offset, addrReg):
-            let addrRegValue = self.registers.get(addrReg.name)
-			if memoryLimit - addrRegValue < offset.signExtended {
+            let addrRegValue = self.registers.get(addrReg)
+			if addrRegValue.unsigned > memoryLimit.unsigned || memoryLimit - addrRegValue < offset.signExtended {
 				// This operation would cause integer overflow, thereby attempting to access invalid memory space above the memory limit
 				print("Cannot access memory space above \(memoryLimit.hexWith0x).")
 				break // Terminate here in the future?
@@ -679,7 +686,7 @@ class REPL {
             }
             if storing {
                 // Storing the value in memReg to memory
-                let valueToStore = self.registers.get(memReg.name)
+                let valueToStore = self.registers.get(memReg)
                 switch(size) {
                 case 0:
                     // Storing a single byte (from low-order bits)
@@ -715,13 +722,13 @@ class REPL {
                     let lowest = self.memory[address + 3] ?? 0
 					loadedValue = Int32(highest: highest, higher: higher, lower: lower, lowest: lowest, extendValue: 0)
                 }
-                self.registers.set(memReg.name, loadedValue)
+                self.registers.set(memReg, loadedValue)
             }
         case let .Jump(link, dest):
             let destinationAddress: Int32
             switch(dest) {
             case .Left(let reg):
-                destinationAddress = self.registers.get(reg.name)
+                destinationAddress = self.registers.get(reg)
 				if destinationAddress == beginningRa {
 					// The user has jumped back to the initial return address, assume this means termination
 					print("Program terminated with exit code 0.")
@@ -731,16 +738,16 @@ class REPL {
                 destinationAddress = addr << 2
             }
             if link {
-                self.registers.set(ra.name, self.currentTextLocation)
+                self.registers.set(ra, self.currentTextLocation)
             }
-            self.registers.set(pc.name, destinationAddress)
+            self.registers.set(pc, destinationAddress)
             self.currentTextLocation = destinationAddress
         case let .Branch(op, link, src1, src2, offset):
-            let reg1Value = self.registers.get(src1.name)
+            let reg1Value = self.registers.get(src1)
 			let src2Value: Int32
 			if src2 != nil {
 				// Comparing with a second register
-				src2Value = self.registers.get(src2!.name)
+				src2Value = self.registers.get(src2!)
 			} else {
 				// Comparing with 0
 				src2Value = 0
@@ -749,9 +756,9 @@ class REPL {
                 // Take this branch
 				let destinationAddress = instruction.location + (offset.signExtended << 2)
                 if link {
-                    self.registers.set(ra.name, self.currentTextLocation)
+                    self.registers.set(ra, self.currentTextLocation)
                 }
-                self.registers.set(pc.name, destinationAddress)
+                self.registers.set(pc, destinationAddress)
                 self.currentTextLocation = destinationAddress
             }
         case .Syscall:
@@ -771,18 +778,18 @@ class REPL {
 	
 	/// Execute a syscall.
     func executeSyscall() {
-        guard let syscallCode = SyscallCode(rawValue: self.registers.get(v0.name)) else {
+        guard let syscallCode = SyscallCode(rawValue: self.registers.get(v0)) else {
             // Don't fatalError() for now, just output
-            print("Invalid syscall code: \(self.registers.get(v0.name))")
+            print("Invalid syscall code: \(self.registers.get(v0))")
             return
         }
         switch(syscallCode) {
         case .PrintInt: // Syscall 1
             // Print the integer currently in $a0
-            print(self.registers.get(a0.name))
+            print(self.registers.get(a0))
         case .PrintString: // Syscall 4
             // Print the string that starts at address $a0 and go until '\0' (0x00) is found
-            var address = self.registers.get(a0.name)
+            var address = self.registers.get(a0)
 			var charValue = self.memory[address] ?? 0
 			while charValue != 0 {
 				print(UnicodeScalar(charValue), terminator: "")
@@ -793,17 +800,17 @@ class REPL {
             // 32 bits, maximum of 2147483647, minimum of -2147483648
             let inputString: String = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding)!.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
 			if let value = Int32(inputString) {
-				self.registers.set(v0.name, value)
+				self.registers.set(v0, value)
 			} else {
 				// Don't print anything, just return 0 in the v0 register
-				self.registers.set(v0.name, 0)
+				self.registers.set(v0, 0)
             }
 		case .ReadString: // Syscall 8
 			// Reads input, storing it in the address supplied in $a0, up to a maximum of
 			// n - 1 characters, padding with '\0' wherever reading stops.
 			let inputString = NSString(data: stdIn.availableData, encoding: NSASCIIStringEncoding) as! String
-			let address = self.registers.get(a0.name)
-			let maxChars = Int(self.registers.get(a1.name) - 1)
+			let address = self.registers.get(a0)
+			let maxChars = Int(self.registers.get(a1) - 1)
 			if maxChars < 1 {
 				// Can't read 0 or negative number of characters; input will just be ignored
 				break
@@ -822,7 +829,7 @@ class REPL {
 			self.executeCommand(.Exit(code: 0))
 		case .PrintChar: // Syscall 11
 			// Print the ASCII representation of the lowest byte of $a0
-			let byte = self.registers.get(a0.name).lowestByte
+			let byte = self.registers.get(a0).lowestByte
 			print(UnicodeScalar(byte), terminator: "")
 		case .ReadChar: // Syscall 12
 			// Read an ASCII character into $v0
@@ -831,44 +838,44 @@ class REPL {
 				break
 			}
 			let char = inputString.unicodeScalars[inputString.unicodeScalars.startIndex]
-			self.registers.set(v0.name, char.value.signed)
+			self.registers.set(v0, char.value.signed)
 		// Syscalls 13-16 are scary file stuff
         case .Exit2: // Syscall 17
             // The assembly program has exited with exit code in $a0
-            print("Program terminated with exit code \(self.registers.get(a0.name)).")
-			self.executeCommand(.Exit(code: self.registers.get(a0.name)))
+            print("Program terminated with exit code \(self.registers.get(a0)).")
+			self.executeCommand(.Exit(code: self.registers.get(a0)))
 		case .Time: // Syscall 30
 			// Return the low-order bits of the system time in $a0, high-order bits in $a1
 			let current = NSDate().timeIntervalSince1970 as Double // Number of seconds since 1/1/1970
 			let int = Int64(current*1000) // Number of milliseconds (rounded) since 1/1/1970
-			self.registers.set(a0.name, int.unsignedLower32.signed)
-			self.registers.set(a1.name, int.unsignedUpper32.signed)
+			self.registers.set(a0, int.unsignedLower32.signed)
+			self.registers.set(a1, int.unsignedUpper32.signed)
 		/*
 		case .MidiOut: // Syscall 31
 			// $a0 = pitch, $a1 = duration (milliseconds), $a2 = instrument, $a3 = volume
 			let pitch: Int
-			let a0Value = self.registers.get(a0.name)
+			let a0Value = self.registers.get(a0)
 			if 0...127 ~= a0Value {
 				pitch = Int(a0Value)
 			} else {
 				pitch = 60 // Middle C
 			}
 			let duration: Int
-			let a1Value = self.registers.get(a1.name)
+			let a1Value = self.registers.get(a1)
 			if a1Value < 0 {
 				duration = 1000
 			} else {
 				duration = Int(a1Value)
 			}
 			let instrument: Int
-			let a2Value = self.registers.get(a2.name)
+			let a2Value = self.registers.get(a2)
 			if 0...127 ~= a2Value {
 				instrument = Int(a2Value)
 			} else {
 				instrument = 0 // Acoustic grand piano
 			}
 			let volume: Int
-			let a3Value = self.registers.get(a3.name)
+			let a3Value = self.registers.get(a3)
 			if 0...127 ~= a3Value {
 				volume = Int(a3Value)
 			} else {
@@ -878,23 +885,23 @@ class REPL {
 		*/
 		case .Sleep: // Syscall 32
 			// Sleep for $a0 milliseconds
-			let time = self.registers.get(a0.name).unsigned
+			let time = self.registers.get(a0).unsigned
 			sleep(time)
 		case .PrintIntHex: // Syscall 34
 			// Print $a0 in hex
-			let value = self.registers.get(a0.name)
+			let value = self.registers.get(a0)
 			print(value.format(PrintOption.Hex.rawValue), terminator: "")
 		case .PrintIntBinary: // Syscall 35
 			// Print $a0 in binary
-			let value = self.registers.get(a0.name)
+			let value = self.registers.get(a0)
 			print(value.format(PrintOption.Binary.rawValue), terminator: "")
 		case .PrintIntUnsigned: // Syscall 36
 			// Print $a0 as an unsigned value in decimal
-			let value = self.registers.get(a0.name).unsigned
+			let value = self.registers.get(a0).unsigned
 			print(value, terminator: "")
         default:
 			// Either actually invalid or just unimplemented
-            print("Invalid syscall code: \(self.registers.get(v0.name))")
+            print("Invalid syscall code: \(self.registers.get(v0))")
         }
     }
 	

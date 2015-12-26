@@ -8,19 +8,18 @@
 
 import Foundation
 
-/// A wrapper for regular expressions.
+/// A wrapper for regular expressions with various utility methods for matching.
 class Regex {
+	/// The NSRegularExpression that this Regex wraps.
     let expression: NSRegularExpression
-    let pattern: String
 	
 	/// Initialize with a supplied pattern. Fails if NSRegularExpression
 	/// initializer fails.
     init?(_ pattern : String) {
-        self.pattern = pattern
         do {
             try self.expression = NSRegularExpression(pattern: pattern, options: [])
         } catch {
-            // Fail
+            // Failed to generate a valid NSRegularExpression, so fail
             self.expression = NSRegularExpression() // Required by compiler
             return nil
         }

@@ -24,8 +24,12 @@ typealias Operation64 = (Int32, Int32) -> (hi: Int32, lo: Int32)
 /// 2 operands, 1 boolean result. Generally used for branch instructions.
 typealias OperationBool = (Int32, Int32) -> Bool
 
-/// Representations of each type of MIPS instruction. Each instruction type has
-/// all appropriate associated values to complete the instruction.
+/// Representations of each type of MIPS instruction. Each InstructionType has
+/// all appropriate associated values to complete the instruction, and they are
+/// guaranteed to be valid to the extent that they can be without having
+/// knowledge from the outside world (e.g. a .Jump instruction is guaranteed to
+/// wrap a destination, but that destination may not be valid until the label
+/// dependency is resolved).
 enum InstructionType {
 	/// An ALU operation that uses 2 source registers. The destination register
 	/// may or may not be used based on which type the operation is.
@@ -151,19 +155,19 @@ class Instruction: CustomStringConvertible {
 				// Format for R-type instructions is
 				// 0000 00ss ssst tttt dddd dhhh hhff ffff
 				// dest is d, s, t, and h depend on whether src2 is a register or shift amount
-				encoding |= dest.number << dShift
+				encoding |= dest.rawValue << dShift
 				switch(src2) {
 				case .Left(let reg):
 					// mfhi and mflo have unusual encodings, they have no real sources to shift in
 					// (src1 is hi/lo and src2 is zero, but this is just an implementation detail)
-					// hi and lo's numbers are -1, so that's the easiest way to identify them
-					if src1.number != -1 {
+					// hi and lo's numbers are negative, so that's the easiest way to identify them
+					if src1.rawValue >= 0 {
 						// This isn't a mfhi/mflo instruction
-						encoding |= src1.number << sShift
-						encoding |= reg.number << tShift
+						encoding |= src1.rawValue << sShift
+						encoding |= reg.rawValue << tShift
 					}
 				case .Right(let shift):
-					encoding |= src1.number << tShift
+					encoding |= src1.rawValue << tShift
 					encoding |= shift << hShift
 				}
 				guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
@@ -174,8 +178,8 @@ class Instruction: CustomStringConvertible {
 			case let .ALUI(_, dest, src1, src2):
 				// Format for I-type instructions is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
-				encoding |= dest.number << tShift
-				encoding |= src1.number << sShift
+				encoding |= dest.rawValue << tShift
+				encoding |= src1.rawValue << sShift
 				encoding |= src2.unsignedExtended.signed
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.instructionString)")
@@ -185,8 +189,8 @@ class Instruction: CustomStringConvertible {
 			case let .Memory(_, _, _, dest, offset, addr):
 				// Format for I-type instructions is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
-				encoding |= dest.number << tShift
-				encoding |= addr.number << sShift
+				encoding |= dest.rawValue << tShift
+				encoding |= addr.rawValue << sShift
 				encoding |= offset.unsignedExtended.signed
 				guard let opcode = iTypeOpcodes[self.arguments[0]] else {
 					print("Unrepresentable instruction: \(self.instructionString)")
@@ -199,7 +203,7 @@ class Instruction: CustomStringConvertible {
 					// This is actually an R-type instruction, not a J-type
 					// Format for the R-type jump:
 					// 0000 00ss sss0 0000 0000 0000 00ff ffff
-					encoding |= reg.number << sShift
+					encoding |= reg.rawValue << sShift
 					guard let functionCode = rTypeFunctionCodes[self.arguments[0]] else {
 						print("Unrepresentable instruction: \(self.instructionString)")
 						return INT32_MAX
@@ -223,11 +227,11 @@ class Instruction: CustomStringConvertible {
 				// Branch instructions are I-type, so their format is
 				// oooo ooss ssst tttt iiii iiii iiii iiii
 				// src1 is s, src2 is t
-				encoding |= src1.number << sShift
+				encoding |= src1.rawValue << sShift
 				let src2Num: Int32
 				if src2 != nil {
 					// This was a beq or bne
-					src2Num = src2!.number
+					src2Num = src2!.rawValue
 				} else {
 					// This was a branch that compares with 0
 					switch(self.arguments[0]) {

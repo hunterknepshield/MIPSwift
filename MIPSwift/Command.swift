@@ -8,7 +8,10 @@
 
 import Foundation
 
-/// Representation of an interpreter command.
+/// Representation of an interpreter command. All arguments are wrapped as
+/// associated values and are guaranteed to be valid to the extent that they can
+/// be without having knowledge from the outside world (e.g. a .Label command
+/// is guaranteed to wrap a valid label, but that label may be undefined).
 enum Command {
 	/// Toggle auto-execution of instructions. If auto-execute was just enabled
 	/// by this command, call resumeExecution() to ensure no instructions are
@@ -26,7 +29,7 @@ enum Command {
 	///
 	/// - Parameter register: The name of the register whose value will be
 	/// printed.
-	case SingleRegister(register: String)
+	case SingleRegister(register: Register)
 	/// Toggle auto-dump of registers after execution of every instruction.
     case AutoDump
 	/// Print all labels as well as their locations.
@@ -87,8 +90,8 @@ enum Command {
 	/// - Parameter code: The code with which to exit.
 	case Exit(code: Int32)
 	
-    /// Construct a Command from an input string. May fail if the command or its
-	/// necessary arguments are invalid.
+    /// Initialize a Command from an input string. May fail if the command or
+	/// its necessary arguments are invalid.
     init?(_ string: String) {
         if string == "" {
             self = .NoOp
@@ -211,12 +214,11 @@ enum Command {
 				print("Command \(command) expects 1 argument, got \(argCount).")
 				return nil
             }
-			if validRegisters.contains(args[0]) {
-				self = .SingleRegister(register: args[0])
-			} else {
+			guard let reg = Register(args[1], writing: false, user: false) else {
 				print("Invalid register reference: \(args[0])")
 				return nil
 			}
+			self = .SingleRegister(register: reg)
         case "autodump", "ad":
             self = .AutoDump
         case "hex", "hexadecimal":
@@ -246,6 +248,7 @@ enum Command {
         case "exit", "quit", "q":
 			self = .Exit(code: 0)
         default:
+			print("Invalid command: \(args[0])")
 			return nil
         }
     }

@@ -76,167 +76,163 @@ class RegisterFile: CustomStringConvertible {
 	/// $ra or $31, return address pointer.
     var ra: Int32 = 0
     // User-inaccessible registers
-	/// Program counter
-    var pc: Int32 = 0
-	/// Hi
+	/// hi, upper 32 bits of large mathematical operations.
     var hi: Int32 = 0
-	/// Lo
+	/// lo, lower 32 bits of large mathematical operations.
     var lo: Int32 = 0
+	/// Program counter.
+	var pc: Int32 = 0
 	
 	/// Get the value of a given register.
-    func get(name: String) -> Int32 {
-        switch(name) {
-        case "$zero", "$0":
-            return self.zero
-        case "$at", "$1":
-            return self.at
-        case "$v0", "$2":
-            return self.v0
-        case "$v1", "$3":
-            return self.v1
-        case "$a0", "$4":
-            return self.a0
-        case "$a1", "$5":
-            return self.a1
-        case "$a2", "$6":
-            return self.a2
-        case "$a3", "$7":
-            return self.a3
-        case "$t0", "$8":
-            return self.t0
-        case "$t1", "$9":
-            return self.t1
-        case "$t2", "$10":
-            return self.t2
-        case "$t3", "$11":
-            return self.t3
-        case "$t4", "$12":
-            return self.t4
-        case "$t5", "$13":
-            return self.t5
-        case "$t6", "$14":
-            return self.t6
-        case "$t7", "$15":
-            return self.t7
-        case "$s0", "$16":
-            return self.s0
-        case "$s1", "$17":
-            return self.s1
-        case "$s2", "$18":
-            return self.s2
-        case "$s3", "$19":
-            return self.s3
-        case "$s4", "$20":
-            return self.s4
-        case "$s5", "$21":
-            return self.s5
-        case "$s6", "$22":
-            return self.s6
-        case "$s7", "$23":
-            return self.s7
-        case "$t8", "$24":
-            return self.t8
-        case "$t9", "$25":
-            return self.t9
-        case "$k0", "$26":
-            return self.k0
-        case "$k1", "$27":
-            return self.k1
-        case "$gp", "$28":
-            return self.gp
-        case "$sp", "$29":
-            return self.sp
-        case "$fp", "$30":
-            return self.fp
-        case "$ra", "$31":
-            return self.ra
-        case "$pc", "pc":
-            return self.pc
-        case "$hi", "hi":
-            return self.hi
-        case "$lo", "lo":
-            return self.lo
-        default:
-            fatalError("Invalid register reference: \(name)")
-        }
+	func get(register: Register) -> Int32 {
+		switch(register) {
+		case .zero:
+			return self.zero
+		case .at:
+			return self.at
+		case .v0:
+			return self.v0
+		case .v1:
+			return self.v1
+		case .a0:
+			return self.a0
+		case .a1:
+			return self.a1
+		case .a2:
+			return self.a2
+		case .a3:
+			return self.a3
+		case .t0:
+			return self.t0
+		case .t1:
+			return self.t1
+		case .t2:
+			return self.t2
+		case .t3:
+			return self.t3
+		case .t4:
+			return self.t4
+		case .t5:
+			return self.t5
+		case .t6:
+			return self.t6
+		case .t7:
+			return self.t7
+		case .s0:
+			return self.s0
+		case .s1:
+			return self.s1
+		case .s2:
+			return self.s2
+		case .s3:
+			return self.s3
+		case .s4:
+			return self.s4
+		case .s5:
+			return self.s5
+		case .s6:
+			return self.s6
+		case .s7:
+			return self.s7
+		case .t8:
+			return self.t8
+		case .t9:
+			return self.t9
+		case .k0:
+			return self.k0
+		case .k1:
+			return self.k1
+		case .gp:
+			return self.gp
+		case .sp:
+			return self.sp
+		case .fp:
+			return self.fp
+		case .ra:
+			return self.ra
+		case .hi:
+			return self.hi
+		case .lo:
+			return self.lo
+		case .pc:
+			return self.pc
+		}
     }
-	
+
 	/// Set the value of a given register.
-    func set(name: String, _ value: Int32) {
-        switch(name) {
-        case "$zero", "$0":
-            fatalError("Cannot change immutable register $zero")
-        case "$at", "$1":
-            self.at = value
-        case "$v0", "$2":
-            self.v0 = value
-        case "$v1", "$3":
-            self.v1 = value
-        case "$a0", "$4":
-            self.a0 = value
-        case "$a1", "$5":
-            self.a1 = value
-        case "$a2", "$6":
-            self.a2 = value
-        case "$a3", "$7":
-            self.a3 = value
-        case "$t0", "$8":
-            self.t0 = value
-        case "$t1", "$9":
-            self.t1 = value
-        case "$t2", "$10":
-            self.t2 = value
-        case "$t3", "$11":
-            self.t3 = value
-        case "$t4", "$12":
-            self.t4 = value
-        case "$t5", "$13":
-            self.t5 = value
-        case "$t6", "$14":
-            self.t6 = value
-        case "$t7", "$15":
-            self.t7 = value
-        case "$s0", "$16":
-            self.s0 = value
-        case "$s1", "$17":
-            self.s1 = value
-        case "$s2", "$18":
-            self.s2 = value
-        case "$s3", "$19":
-            self.s3 = value
-        case "$s4", "$20":
-            self.s4 = value
-        case "$s5", "$21":
-            self.s5 = value
-        case "$s6", "$22":
-            self.s6 = value
-        case "$s7", "$23":
-            self.s7 = value
-        case "$t8", "$24":
-            self.t8 = value
-        case "$t9", "$25":
-            self.t9 = value
-        case "$k0", "$26":
-            self.k0 = value
-        case "$k1", "$27":
-            self.k1 = value
-        case "$gp", "$28":
-            self.gp = value
-        case "$sp", "$29":
-            self.sp = value
-        case "$fp", "$30":
-            self.fp = value
-        case "$ra", "$31":
-            self.ra = value
-        case "$pc", "pc":
-            self.pc = value
-        case "$hi", "hi":
-            self.hi = value
-        case "$lo", "lo":
-            self.lo = value
-        default:
-            fatalError("Invalid register reference: \(name)")
-        }
+	func set(register: Register, _ value: Int32) {
+		switch(register) {
+		case .zero:
+			fatalError("Cannot modify immutable register: \(register.name)")
+		case .at:
+			self.at = value
+		case .v0:
+			self.v0 = value
+		case .v1:
+			self.v1 = value
+		case .a0:
+			self.a0 = value
+		case .a1:
+			self.a1 = value
+		case .a2:
+			self.a2 = value
+		case .a3:
+			self.a3 = value
+		case .t0:
+			self.t0 = value
+		case .t1:
+			self.t1 = value
+		case .t2:
+			self.t2 = value
+		case .t3:
+			self.t3 = value
+		case .t4:
+			self.t4 = value
+		case .t5:
+			self.t5 = value
+		case .t6:
+			self.t6 = value
+		case .t7:
+			self.t7 = value
+		case .s0:
+			self.s0 = value
+		case .s1:
+			self.s1 = value
+		case .s2:
+			self.s2 = value
+		case .s3:
+			self.s3 = value
+		case .s4:
+			self.s4 = value
+		case .s5:
+			self.s5 = value
+		case .s6:
+			self.s6 = value
+		case .s7:
+			self.s7 = value
+		case .t8:
+			self.t8 = value
+		case .t9:
+			self.t9 = value
+		case .k0:
+			self.k0 = value
+		case .k1:
+			self.k1 = value
+		case .gp:
+			self.gp = value
+		case .sp:
+			self.sp = value
+		case .fp:
+			self.fp = value
+		case .ra:
+			self.ra = value
+		case .hi:
+			self.hi = value
+		case .lo:
+			self.lo = value
+		case .pc:
+			self.pc = value
+		}
     }
 	
 	/// The current formatting setting used in self.description.

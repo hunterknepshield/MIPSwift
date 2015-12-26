@@ -11,7 +11,10 @@
 
 import Foundation
 
-/// Representation of an assembler directive.
+/// Representation of an assembler directive. All arguments are wrapped as
+/// associated values and are guaranteed to be valid to the extent that they can
+/// be without having knowledge from the outside world (e.g. a .Equals directive
+/// is guaranteed to wrap a valid name, but that name may be already defined).
 enum Directive {
 	/// Change to the text segment.
     case Text

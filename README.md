@@ -16,6 +16,7 @@ This project is a top-level MIPS interpreter. It runs MIPS 32-bit instructions, 
 - Execute safely - if something would cause an error if it went through to execution, you'll be warned and nothing bad will happen (in most cases; this is not guaranteed).
 
 ## What it can't do (yet...?), a.k.a. issues
+- No support for "undo" or a similar function.
 - Can't generate executables or linkable object files.
 - Floating point operations, directives, and instructions are not implemented.
 - Overflow handling may still be messy; haven't done enough testing with that yet. No detection or exception handling implementation yet.

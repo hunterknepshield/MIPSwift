@@ -19,9 +19,12 @@ let commandLineOptions = "[-d] [-noae] [-f file]"
 let beginningText: Int32 = 0x00400000
 /// The beginning location of the data segment.
 let beginningData: Int32 = 0x10000000
-/// The last byte of memory that is accessible to the user's program.
+/// The last byte of memory accessible to the user's program, 0x7FFFFFFF.
 let memoryLimit = INT32_MAX
-/// The initial location of the stack pointer.
+/// The initial location of the stack pointer. The stack grows towards smaller
+/// addresses. If the user attempts to increment the stack pointer instead of
+/// decrementing it, the REPL will attempt to stop it before causing an integer
+/// overflow.
 let beginningSp: Int32 = 0x7FFFFFFC
 /// The initial return address. When the program jumps to this address, it's
 /// assumed to mean same thing as using the exit syscall (exit code 0).
@@ -63,15 +66,15 @@ let fp = Register("$fp", writing: true, user: false)!
 /// The register $gp, which is used as a pointer into the data segment.
 /// Generally unused.
 let gp = Register("$gp", writing: true, user: false)!
-/// The register $pc, which is used as the address of the current instruction to
+/// The register hi, which is used in 64-bit instructions, such as multiplication
+/// and division.
+let hi = Register("hi", writing: true, user: false)!
+/// The register lo, which is used in 64-bit instructions, such as multiplication
+/// and division.
+let lo = Register("lo", writing: true, user: false)!
+/// The register pc, which is used as the address of the current instruction to
 /// execute.
-let pc = Register("$pc", writing: true, user: false)!
-/// The register $hi, which is used in 64-bit instructions, such as multiplication
-/// and division.
-let hi = Register("$hi", writing: true, user: false)!
-/// The register $lo, which is used in 64-bit instructions, such as multiplication
-/// and division.
-let lo = Register("$lo", writing: true, user: false)!
+let pc = Register("pc", writing: true, user: false)!
 /// The register $a0, which is used for argument passing, including in syscalls.
 let a0 = Register("$a0", writing: true, user: false)!
 /// The register $a1, which is used for argument passing, including in syscalls.
