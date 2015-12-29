@@ -85,6 +85,9 @@ enum Command {
 	///
 	/// - Parameter file: The file name to be opened.
 	case UseFile(file: String)
+	/// Reset the interpreter's internal state, alleviating the need to stop and
+	/// restart the program to clear internal state.
+	case Reset
 	/// Exit the interpreter.
 	///
 	/// - Parameter code: The code with which to exit.
@@ -245,6 +248,8 @@ enum Command {
 				return nil
             }
 			self = .UseFile(file: args[0])
+		case "reset", "res", "clear", "clr":
+			self = .Reset
         case "exit", "quit", "q":
 			self = .Exit(code: 0)
         default:

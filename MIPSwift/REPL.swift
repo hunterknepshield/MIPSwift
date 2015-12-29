@@ -79,14 +79,42 @@ class REPL {
         self.registers.printOption = options.printSetting
         self.inputSource = options.inputSource
         self.usingFile = options.usingFile
-        
-        // Set initial register values
-        self.registers.set(pc, beginningText)
-        self.registers.set(sp, beginningSp)
+		
+		self.resetState(false)
+    }
+	
+	/// Reset the internal state of self, including clearing any stored labels,
+	/// instructions, register values, etc.
+	///
+	/// - Parameter internalReset: Used to determine whether or not a full reset
+	/// is needed, which resets internal state variables as well. Default true.
+	func resetState(internalReset: Bool = true) {
+		if internalReset {
+			// Reinitialize internal variables
+			self.registers = RegisterFile()
+			self.labelsToLocations = [String : Int32]()
+			self.locationsToInstructions = [Int32 : Instruction]()
+			self.unresolvedInstructions = [String : [Instruction]]()
+			self.constantsToValues = [String : Int32]()
+			self.memory = [Int32 : UInt8]()
+			self.currentTextLocation = beginningText
+			self.pausedTextLocation = nil
+			self.currentlyResuming = false
+			self.currentDataLocation = beginningData
+			self.writingData = false
+			
+			self.inputSource = stdIn
+			self.usingFile = false
+			// Don't modify any other options
+		}
+		
+		// Set initial register values
+		self.registers.set(pc, beginningText)
+		self.registers.set(sp, beginningSp)
 		self.registers.set(fp, beginningSp)
 		self.registers.set(gp, beginningData)
 		self.registers.set(ra, beginningRa)
-    }
+	}
 	
 	/// Begin reading input. This function will continue running until either an
 	/// error occurs within the interpreter itself or the exit command is used.
@@ -577,7 +605,7 @@ class REPL {
             print("The value printed with the prompt is the current value of the program counter. For example: '\(beginningText.hexWith0x)>'")
             print("To enter an interpreter command, type '\(commandDelimiter)' followed by the command. Type '\(commandDelimiter)commands' to see all commands.")
         case .Commands:
-            print("All interpreter commands. Required parameters are displayed in [brackets], optional parameters are displayed in (parentheses), and multiple valid values are separated|by|pipes. Locations are assumed to be given in hexadecimal, and register names must begin with the '\(registerDelimiter)' delimiter.")
+            print("All interpreter commands. Required parameters are listed in [brackets], optional parameters are listed in (parentheses), and multiple valid alternatives are separated|by|pipes. Locations are always parsed as hexadecimal numbers, and register names must begin with the '\(registerDelimiter)' delimiter.")
             print("\tautoexecute|ae:                                 toggle auto-execution of entered instructions.")
             print("\texecute|exec|ex|e:                              execute all instructions previously paused by disabling auto-execution.")
             print("\ttrace|t:                                        toggle printing of every instruction as it is executed.")
@@ -603,6 +631,7 @@ class REPL {
             print("\tcommands|cmds:                                  display this message.")
             print("\tnoop|n:                                         do nothing.")
             print("\tfile|f|use|usefile|openfile|open|o [file]:      open a file to read instructions from (auto-execution will be paused).")
+			print("\treset|res|clear|clr:                            reset interpreter state and clear all stored instructions.")
             print("\texit|quit|q:                                    exit the interpreter.")
         case .About:
             // Display information about the interpreter
@@ -633,6 +662,12 @@ class REPL {
             self.inputSource = openFile
             self.autoexecute = false // Disable for good measure
             print("Opened file: \(filename)")
+		case .Reset:
+			// Clear out all initial settings
+			print("Clearing REPL state... ", terminator: "")
+			self.resetState()
+			print("Done.")
+			executeCommand(.Status)
         }
     }
 	
