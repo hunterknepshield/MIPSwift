@@ -43,10 +43,15 @@ class REPL {
 	/// Used to determine the current location at which a piece of data should
 	/// be written; may be either in the text segment or in the data segment.
 	var currentWriteLocation: Int32 {
-		get { return self.writingData ? self.currentDataLocation : self.currentTextLocation }
+		get {
+			return self.writingData ? self.currentDataLocation : self.currentTextLocation
+		}
 		set {
-			if self.writingData { self.currentDataLocation = newValue }
-			else { self.currentTextLocation = newValue }
+			if self.writingData {
+				self.currentDataLocation = newValue
+			} else {
+				self.currentTextLocation = newValue
+			}
 		}
 	}
 	
@@ -57,7 +62,11 @@ class REPL {
 	var inputSource: NSFileHandle
 	/// Used to determine whether or not input is being read from a file or
 	/// standard input.
-	var usingFile: Bool
+	var usingFile: Bool {
+		get {
+			return inputSource != stdIn
+		}
+	}
 	/// Current setting for verbose instruction parsing.
     var verbose = false
 	/// Current setting for auto-dump of registers after instruction execution.
@@ -78,7 +87,6 @@ class REPL {
         self.trace = options.trace
         self.registers.printOption = options.printSetting
         self.inputSource = options.inputSource
-        self.usingFile = options.usingFile
 		
 		self.resetState(false)
     }
@@ -104,7 +112,6 @@ class REPL {
 			self.writingData = false
 			
 			self.inputSource = stdIn
-			self.usingFile = false
 			// Don't modify any other options
 		}
 		
@@ -273,7 +280,6 @@ class REPL {
 			}
             self.inputSource.closeFile()
             self.inputSource = stdIn
-            self.usingFile = false
             return ["\(commandDelimiter)noop"]
         }
 		// Trims whitespace before of and after the input, including trailing newline, then split on newline characters
@@ -665,7 +671,6 @@ class REPL {
                 print("Unable to open file: \(filename).")
                 break
             }
-            self.usingFile = true
             self.inputSource = openFile
             self.autoexecute = false // Disable for good measure
             print("Opened file: \(filename)")

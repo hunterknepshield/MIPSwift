@@ -18,12 +18,13 @@ struct REPLOptions {
 	/// The initial dump setting for how registers will be formatted.
     var printSetting: PrintOption = .Hex
 	/// The initial source the REPL will read input from.
-    var inputSource = stdIn
-	/// Indicate to the REPL that it will be reading from a file or not. If
-	/// inputSource != stdIn, this should be true.
-    var usingFile = false
+	var inputSource = stdIn
+	
+	/// A REPLOptions instance with autodump set to true, autoexecute set to false, trace set to true, and all other settings the same as the default initializer.
+	static let developerOptions = REPLOptions(verbose: false, autodump: true, autoexecute: false, trace: true, printSetting: .Hex, inputSource: stdIn)
 }
 
+/// An enumeration of the different possible formattings for numbers in MIPSwift.
 enum PrintOption: String, CustomStringConvertible {
 	/// 8 hex digits, filling in with 0.
     case Hex = "%08x"

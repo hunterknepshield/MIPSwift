@@ -13,8 +13,8 @@ print("MIPSwift v\(mipswiftVersion)")
 let executableArgs = Process.arguments
 var printUsageAndTerminate = false
 var useDeveloperOptions = false
-var defaultOptions = REPLOptions() // verbose = false, autodump = false, autoexecute = true, trace = false, printSetting = .Hex, inputSource = stdIn, usingFile = false
-var developerOptions = REPLOptions(verbose: false, autodump: true, autoexecute: false, trace: true, printSetting: .Hex, inputSource: stdIn, usingFile: false)
+var defaultOptions = REPLOptions() // verbose = false, autodump = false, autoexecute = true, trace = false, printSetting = .Hex, inputSource = stdIn
+var developerOptions = REPLOptions.developerOptions
 
 // Parse command line arguments if there are any
 for (index, argument) in executableArgs.enumerate() {
@@ -44,8 +44,6 @@ for (index, argument) in executableArgs.enumerate() {
             }
             defaultOptions.inputSource = fileHandle
             developerOptions.inputSource = fileHandle
-            defaultOptions.usingFile = true
-            developerOptions.usingFile = true
             // Also turn off auto-execute, as labels may be used before they're defined within a file
             defaultOptions.autoexecute = false
             // developerOptions.autoexecute is already false
