@@ -1,5 +1,5 @@
 //
-//  StringExtension.swift
+//  Extensions.swift
 //  MIPSwift
 //
 //  Created by Hunter Knepshield on 12/10/15.
@@ -18,7 +18,7 @@ extension String.CharacterView {
 	
 	/// Get a range of elements of self as a string.
 	subscript(r: Range<Int>) -> String {
-		return String(self[Range(start: self.startIndex.advancedBy(r.startIndex), end: self.startIndex.advancedBy(r.endIndex))])
+		return String(self[self.startIndex.advancedBy(r.startIndex)..<self.startIndex.advancedBy(r.endIndex)])
 	}
 }
 

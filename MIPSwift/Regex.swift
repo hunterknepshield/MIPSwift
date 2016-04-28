@@ -44,7 +44,7 @@ class Regex {
 				// The capture group had an empty result for this match
 				continue
 			}
-			let range = Range(start: testString.startIndex.advancedBy(nsrange.location), end: testString.startIndex.advancedBy(nsrange.location + nsrange.length))
+			let range = testString.startIndex.advancedBy(nsrange.location)..<testString.startIndex.advancedBy(nsrange.location + nsrange.length)
 			result.append(testString.substringWithRange(range))
 		}
 		return result

@@ -463,7 +463,13 @@ class REPL {
         case .LabelDump:
             // Print the current labels that are stored in order of their location (if locations are equal, alphabetical order)
             print("All labels currently stored: ", terminator: self.labelsToLocations.count == 0 ? "(none)\n" : "\n")
-			let alphabetized = self.labelsToLocations.sort({ return $0.0.1 < $0.1.1 || ($0.0.1 == $0.1.1 && $0.0.0 < $0.1.0) })
+			let alphabetized = self.labelsToLocations.sort({
+				if $0.0.1 < $0.1.1 {
+					return true
+				} else {
+					return $0.0.1 == $0.1.1 && $0.0.0 < $0.1.0
+				}
+			})
 			alphabetized.forEach({ print("\t\($0.stringByPaddingToLength(24, withString: " ", startingAtIndex: 0)) \($1.hexWith0x)") })
         case .SingleLabel(let label):
             // Print the location of the given label
@@ -561,7 +567,8 @@ class REPL {
 					print("[\((location + counter*4).hexWith0x)]", terminator: "\t")
                 }
 				lineString += ascii[counter*4..<(counter*4 + 4)]
-                print($0.hexWith0x, terminator: ++counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
+				counter += 1
+                print($0.hexWith0x, terminator: counter % 4 == 0 ? "\t\t" : " ") // Counter incremented here
 				if counter % 4 == 0 {
 					// Print the ASCII characters for the values in the most recent 16 bytes
 					print("\(lineString)")
@@ -828,7 +835,8 @@ class REPL {
 			var charValue = self.memory[address] ?? 0
 			while charValue != 0 {
 				print(UnicodeScalar(charValue), terminator: "")
-				charValue = self.memory[++address] ?? 0
+				address += 1
+				charValue = self.memory[address] ?? 0
 			}
         case .ReadInt: // Syscall 5
             // Read an integer from standard input and return it in $v0
@@ -956,34 +964,43 @@ class REPL {
 			// Align current counter to a 2^n-byte boundary
 			let boundary = 1 << n // n = 0 -> boundary = 1, n = 1 -> boundary = 2, n = 2 -> boundary = 4
 			while self.currentWriteLocation % boundary != 0 {
-				self.currentWriteLocation++
+				self.currentWriteLocation += 1
 			}
 		case .Space(let n):
 			// Allocate n bytes, which essentially amounts to skipping forward n bytes
 			self.currentWriteLocation += n
 		case .Word(let values):
 			for value in values {
-				self.memory[self.currentWriteLocation++] = value.highestByte
-				self.memory[self.currentWriteLocation++] = value.higherByte
-				self.memory[self.currentWriteLocation++] = value.lowerByte
-				self.memory[self.currentWriteLocation++] = value.lowestByte
+				self.memory[self.currentWriteLocation] = value.highestByte
+				self.currentWriteLocation += 1
+				self.memory[self.currentWriteLocation] = value.higherByte
+				self.currentWriteLocation += 1
+				self.memory[self.currentWriteLocation] = value.lowerByte
+				self.currentWriteLocation += 1
+				self.memory[self.currentWriteLocation] = value.lowestByte
+				self.currentWriteLocation += 1
 			}
 		case .Half(let values):
 			for value in values {
-				self.memory[self.currentWriteLocation++] = value.upperByte
-				self.memory[self.currentWriteLocation++] = value.lowerByte
+				self.memory[self.currentWriteLocation] = value.upperByte
+				self.currentWriteLocation += 1
+				self.memory[self.currentWriteLocation] = value.lowerByte
+				self.currentWriteLocation += 1
 			}
 		case .Byte(let values):
 			for value in values {
-				self.memory[self.currentWriteLocation++] = UInt8(bitPattern: value)
+				self.memory[self.currentWriteLocation] = UInt8(bitPattern: value)
+				self.currentWriteLocation += 1
 			}
 		case .Ascii(let string):
 			for char in string.unicodeScalars {
-				self.memory[self.currentWriteLocation++] = UInt8(char.value)
+				self.memory[self.currentWriteLocation] = UInt8(char.value)
+				self.currentWriteLocation += 1
 			}
 		case .Asciiz(let string):
 			for char in string.unicodeScalars {
-				self.memory[self.currentWriteLocation++] = UInt8(char.value)
+				self.memory[self.currentWriteLocation] = UInt8(char.value)
+				self.currentWriteLocation += 1
 			}
 		case .Equals(let name, let value):
 			// The name and value are guaranteed valid, but the name may not be unique
